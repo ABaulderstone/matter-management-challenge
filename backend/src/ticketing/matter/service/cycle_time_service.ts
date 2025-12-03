@@ -1,26 +1,28 @@
 import { config } from '../../../utils/config.js';
 import { SLAStatus, CycleTime } from '../../types.js';
+import MatterRepo from '../repo/matter_repo.js';
+import logger from '../../../utils/logger.js';
 
 /**
  * CycleTimeService - Calculate resolution times and SLA status for matters
- * 
+ *
  * TODO: Implement this service to:
  * 1. Calculate resolution time from "To Do" → "Done" status transitions
  * 2. Determine SLA status based on resolution time vs threshold
  * 3. Format durations in human-readable format (e.g., "2h 30m", "3d 5h")
- * 
+ *
  * Requirements:
  * - Query ticketing_cycle_time_histories table
  * - Join with status groups to identify "To Do", "In Progress", "Done" statuses
  * - Calculate time between first transition and "Done" transition
  * - For in-progress matters, calculate time from first transition to now
  * - Compare against SLA_THRESHOLD_HOURS (default: 8 hours)
- * 
+ *
  * SLA Status Logic:
  * - "In Progress": Matter not yet in "Done" status
  * - "Met": Resolved within threshold (≤ 8 hours)
  * - "Breached": Resolved after threshold (> 8 hours)
- * 
+ *
  * Consider:
  * - Performance for 10,000+ matters
  * - Caching strategies for high load
@@ -29,9 +31,11 @@ import { SLAStatus, CycleTime } from '../../types.js';
 export class CycleTimeService {
   // SLA threshold in milliseconds (candidates will use this in their implementation)
   private _slaThresholdMs: number;
+  private matterRepo: MatterRepo;
 
   constructor() {
     this._slaThresholdMs = config.SLA_THRESHOLD_HOURS * 60 * 60 * 1000;
+    this.matterRepo = new MatterRepo();
   }
 
   async calculateCycleTimeAndSLA(
@@ -40,8 +44,13 @@ export class CycleTimeService {
   ): Promise<{ cycleTime: CycleTime; sla: SLAStatus }> {
     // TODO: Implement cycle time calculation
     // See requirements in class documentation above
-    
+
     // Placeholder return - replace with actual implementation
+
+    const data = await this.matterRepo.getTicketQueryTime(_ticketId);
+    logger.info(data);
+    console.log(data);
+    logger.info('HERE');
     return {
       cycleTime: {
         resolutionTimeMs: null,
@@ -64,4 +73,3 @@ export class CycleTimeService {
 }
 
 export default CycleTimeService;
-

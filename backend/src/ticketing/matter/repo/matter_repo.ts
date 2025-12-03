@@ -1,25 +1,32 @@
 import pool from '../../../db/pool.js';
-import { Matter, MatterListParams, FieldValue, UserValue, CurrencyValue, StatusValue } from '../../types.js';
+import {
+  Matter,
+  MatterListParams,
+  FieldValue,
+  UserValue,
+  CurrencyValue,
+  StatusValue,
+} from '../../types.js';
 import logger from '../../../utils/logger.js';
 import { PoolClient } from 'pg';
 
 export class MatterRepo {
   /**
    * Get paginated list of matters with search and sorting
-   * 
+   *
    * TODO: Implement search functionality
    * - Search across text, number, and other field types
    * - Use PostgreSQL pg_trgm extension for fuzzy matching
    * - Consider performance with proper indexing
    * - Support searching cycle times and SLA statuses
-   * 
+   *
    * Search Requirements:
    * - Text fields: Use ILIKE with pg_trgm indexes
    * - Number fields: Convert to text for search
    * - Status fields: Search by label
    * - User fields: Search by name
    * - Consider debouncing on frontend (already implemented)
-   * 
+   *
    * Performance Considerations for 10× Load:
    * - Add GIN indexes on searchable columns
    * - Consider Elasticsearch for advanced search at scale
@@ -54,7 +61,7 @@ export class MatterRepo {
         LEFT JOIN ticketing_ticket_field_value ttfv ON tt.id = ttfv.ticket_id
         WHERE 1=1 ${searchCondition}
       `;
-      
+
       const countResult = await client.query(countQuery, queryParams);
       const total = parseInt(countResult.rows[0].total);
 
@@ -67,7 +74,7 @@ export class MatterRepo {
         ORDER BY ${orderByClause}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
       `;
-      
+
       queryParams.push(limit, offset);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
@@ -76,7 +83,7 @@ export class MatterRepo {
 
       for (const matterRow of mattersResult.rows) {
         const fields = await this.getMatterFields(client, matterRow.id);
-        
+
         matters.push({
           id: matterRow.id,
           boardId: matterRow.board_id,
@@ -128,7 +135,10 @@ export class MatterRepo {
   /**
    * Get all field values for a matter
    */
-  private async getMatterFields(client: PoolClient, ticketId: string): Promise<Record<string, FieldValue>> {
+  private async getMatterFields(
+    client: PoolClient,
+    ticketId: string,
+  ): Promise<Record<string, FieldValue>> {
     const fieldsResult = await client.query(
       `SELECT 
         ttfv.id,
@@ -167,7 +177,8 @@ export class MatterRepo {
     const fields: Record<string, FieldValue> = {};
 
     for (const row of fieldsResult.rows) {
-      let value: string | number | boolean | Date | CurrencyValue | UserValue | StatusValue | null = null;
+      let value: string | number | boolean | Date | CurrencyValue | UserValue | StatusValue | null =
+        null;
       let displayValue: string | undefined = undefined;
 
       switch (row.field_type) {
@@ -285,7 +296,7 @@ export class MatterRepo {
         case 'status': {
           columnName = 'status_reference_value_uuid';
           columnValue = value as string;
-          
+
           // Track status change in cycle time history
           const currentStatusResult = await client.query(
             `SELECT status_reference_value_uuid 
@@ -293,10 +304,10 @@ export class MatterRepo {
              WHERE ticket_id = $1 AND ticket_field_id = $2`,
             [matterId, fieldId],
           );
-          
+
           if (currentStatusResult.rows.length > 0) {
             const fromStatusId = currentStatusResult.rows[0].status_reference_value_uuid;
-            
+
             await client.query(
               `INSERT INTO ticketing_cycle_time_histories 
                (ticket_id, status_field_id, from_status_id, to_status_id, transitioned_at)
@@ -321,10 +332,9 @@ export class MatterRepo {
       );
 
       // Update matter's updated_at
-      await client.query(
-        `UPDATE ticketing_ticket SET updated_at = NOW() WHERE id = $1`,
-        [matterId],
-      );
+      await client.query(`UPDATE ticketing_ticket SET updated_at = NOW() WHERE id = $1`, [
+        matterId,
+      ]);
 
       await client.query('COMMIT');
     } catch (error) {
@@ -335,7 +345,66 @@ export class MatterRepo {
       client.release();
     }
   }
+
+  async getTicketQueryTime(ticketId: String) {
+    const client = await pool.connect();
+
+    try {
+      const cycleTimeResult = await client.query(
+        `
+          WITH 
+              done_group AS (
+                SELECT id
+                FROM ticketing_field_status_groups
+                WHERE sequence = 3
+              ),
+
+              done_statuses AS (
+                SELECT id
+                FROM ticketing_field_status_options
+                WHERE group_id IN (SELECT id FROM done_group)
+              ),
+
+              first_transition AS (
+                SELECT 
+                  ticket_id,
+                  MIN(transitioned_at) AS first_transition_at
+                FROM ticketing_cycle_time_histories
+                WHERE ticket_id = $1
+                GROUP BY ticket_id
+              ),
+
+              first_done AS (
+                SELECT 
+                  ticket_id,
+                  MIN(transitioned_at) AS first_done_at
+                FROM ticketing_cycle_time_histories
+                WHERE ticket_id = $1
+                  AND to_status_id IN (SELECT id FROM done_statuses)
+                GROUP BY ticket_id
+              )
+
+            SELECT
+              ft.ticket_id,
+              ft.first_transition_at,
+              fd.first_done_at,
+              fd.first_done_at - ft.first_transition_at AS cycle_time
+            FROM first_transition ft
+            JOIN first_done fd ON ft.ticket_id = fd.ticket_id;
+            `,
+        [ticketId],
+      );
+
+      if (cycleTimeResult.rows.length === 0) {
+        return null;
+      }
+
+      const row = cycleTimeResult.rows[0];
+      return row;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 export default MatterRepo;
-

@@ -35,6 +35,7 @@ export class CycleTimeService {
 
   constructor() {
     this._slaThresholdMs = config.SLA_THRESHOLD_HOURS * 60 * 60 * 1000;
+    // adding the repo here felt like the most sensible
     this.matterRepo = new MatterRepo();
   }
 
@@ -42,23 +43,20 @@ export class CycleTimeService {
     _ticketId: string,
     _currentStatusGroupName: string | null,
   ): Promise<{ cycleTime: CycleTime; sla: SLAStatus }> {
-    // TODO: Implement cycle time calculation
-    // See requirements in class documentation above
-
-    // Placeholder return - replace with actual implementation
-
+    // I feel this should be typed
     const data = await this.matterRepo.getTicketQueryTime(_ticketId);
+    const resolutionTime = +data.cycle_time_to_done;
     return {
       cycleTime: {
-        resolutionTimeMs: +data.cycle_time_to_done,
-        resolutionTimeFormatted: data.first_done_at
-          ? this._formatDuration(data.first_done_at, false)
-          : this._formatDuration(data.first_transition_at, true),
-        isInProgress: !!data.first_done_at,
+        resolutionTimeMs: resolutionTime,
+        resolutionTimeFormatted: resolutionTime
+          ? this._formatDuration(resolutionTime, false)
+          : this._formatDuration(+data.cycle_time_to_now, true),
+        isInProgress: !data.first_done_at,
         startedAt: data.first_transition_at,
         completedAt: data.first_done_at,
       },
-      sla: 'In Progress',
+      sla: this._formatSLAText(resolutionTime),
     };
   }
 
@@ -80,7 +78,11 @@ export class CycleTimeService {
 
     const [largestUnit, nextUnit] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
 
-    return `${_isInProgress ? 'In Progress' : ''} ${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
+    return `${_isInProgress ? 'In Progress: ' : ''}${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
+  }
+
+  private _formatSLAText(_durationMs: number) {
+    return !_durationMs ? 'In Progress' : _durationMs <= this._slaThresholdMs ? 'Met' : 'Breached';
   }
 }
 

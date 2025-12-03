@@ -399,9 +399,7 @@ export class MatterRepo {
         return null;
       }
 
-      const row = cycleTimeResult.rows[0];
-      console.log(row);
-      return row;
+      return cycleTimeResult.rows[0];
     } finally {
       client.release();
     }

@@ -400,6 +400,7 @@ export class MatterRepo {
       }
 
       const row = cycleTimeResult.rows[0];
+      console.log(row);
       return row;
     } finally {
       client.release();

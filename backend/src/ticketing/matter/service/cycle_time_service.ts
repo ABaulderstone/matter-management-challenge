@@ -48,16 +48,15 @@ export class CycleTimeService {
     // Placeholder return - replace with actual implementation
 
     const data = await this.matterRepo.getTicketQueryTime(_ticketId);
-    logger.info(data);
-    console.log(data);
-    logger.info('HERE');
     return {
       cycleTime: {
-        resolutionTimeMs: null,
-        resolutionTimeFormatted: 'N/A',
-        isInProgress: false,
-        startedAt: null,
-        completedAt: null,
+        resolutionTimeMs: +data.cycle_time_to_done,
+        resolutionTimeFormatted: data.first_done_at
+          ? this._formatDuration(data.first_done_at, false)
+          : this._formatDuration(data.first_transition_at, true),
+        isInProgress: !!data.first_done_at,
+        startedAt: data.first_transition_at,
+        completedAt: data.first_done_at,
       },
       sla: 'In Progress',
     };
@@ -65,10 +64,23 @@ export class CycleTimeService {
 
   // Helper method for formatting durations (candidates will implement this)
   private _formatDuration(_durationMs: number, _isInProgress: boolean): string {
-    // TODO: Implement duration formatting
-    // Format as "2h 30m", "3d 5h", etc.
-    // Prefix with "In Progress: " if matter is not complete
-    return 'N/A';
+    // for readability rather than neccesity
+    const msInSecond = 1000;
+    const msInMinute = msInSecond * 60;
+    const msInHour = msInMinute * 60;
+    const msInDay = 24 * msInHour;
+    const d = Math.floor(_durationMs / msInDay);
+    let remainder = _durationMs % msInDay;
+    const h = Math.floor(remainder / msInHour);
+    remainder %= msInHour;
+    const m = Math.floor(remainder / msInMinute);
+    remainder %= msInMinute;
+    const s = Math.floor(remainder / msInSecond);
+    // probably no need to be accurate to ms
+
+    const [largestUnit, nextUnit] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
+
+    return `${_isInProgress ? 'In Progress' : ''} ${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
   }
 }
 

@@ -6,19 +6,22 @@ Welcome! We're excited to see your approach to building a production-ready syste
 
 You'll be enhancing a **Matter Management System** - a tool for legal teams to track cases and matters. We've provided a working foundation, and you'll implement the missing features.
 
-**Time Estimate**: 4-8 hours  
+**Time Estimate**: 4-8 hours
 
 ---
 
 ## 📖 Start Here
 
 ### Step 1: Read the Instructions
+
 👉 **[ASSESSMENT.md](./ASSESSMENT.md)** - Your main task list and requirements
 
 ### Step 2: Understand the Database
+
 👉 **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Complete schema docs (READ THIS before coding!)
 
 ### Step 3: Quick Setup
+
 👉 **[QUICKSTART.md](./QUICKSTART.md)** - Setup guide and troubleshooting
 
 ---
@@ -48,45 +51,56 @@ That's it! You now have a running application with 10,000 pre-seeded matters.
 We've intentionally left some features incomplete for you to implement:
 
 ### 1. ⏱️ Cycle Time & SLA Calculation
+
 Implement logic to track how long matters take to resolve and whether they meet our 8-hour SLA.
 
 **What you'll build**:
+
 - Calculate resolution time from "To Do" → "Done"
 - Determine SLA status (Met, Breached, In Progress)
 - Display with color-coded badges in the UI
 
 **Files to modify**:
+
 - `backend/src/ticketing/matter/service/cycle_time_service.ts`
 - `frontend/src/components/MatterTable.tsx`
 
 ### 2. 🔄 Column Sorting
+
 Add sorting functionality to ALL table columns (currently only date sorting works).
 
 **What you'll build**:
+
 - Sort by numbers, text, dates, statuses, users, currency, booleans
 - Handle NULL values appropriately
 - Work with the EAV database pattern
 
 **Files to modify**:
+
 - `backend/src/ticketing/matter/repo/matter_repo.ts`
 - `frontend/src/components/MatterTable.tsx`
 
 ### 3. 🔍 Search
+
 Implement search across all fields using PostgreSQL full-text search.
 
 **What you'll build**:
+
 - Search text, numbers, status labels, user names
 - Debounced search input (500ms)
 - Use pg_trgm for fuzzy matching
 
 **Files to modify**:
+
 - `backend/src/ticketing/matter/repo/matter_repo.ts`
 - `frontend/src/App.tsx` (add SearchBar component)
 
 ### 4. 🧪 Tests
+
 Write comprehensive tests for your implementations.
 
 **What you'll write**:
+
 - Unit tests for cycle time logic
 - Integration tests for API endpoints
 - Edge case tests (NULL values, empty data)
@@ -95,9 +109,11 @@ Write comprehensive tests for your implementations.
 **Directory**: `backend/src/ticketing/matter/service/__tests__/`
 
 ### 5. 📈 Scalability Documentation
+
 Document how your solution would handle 10× the current load (100,000 matters, 1,000+ concurrent users).
 
 **What to include**:
+
 - Database optimization strategies
 - Caching approaches
 - Query optimization
@@ -112,6 +128,7 @@ Document how your solution would handle 10× the current load (100,000 matters, 
 To save you time, we've provided a fully working foundation:
 
 ### Database (PostgreSQL)
+
 - ✅ 11 tables with complete schema
 - ✅ 10,000 pre-seeded matters with realistic data
 - ✅ 8 field types (text, number, select, date, currency, boolean, status, user)
@@ -120,6 +137,7 @@ To save you time, we've provided a fully working foundation:
 - ✅ pg_trgm extension enabled for search
 
 ### Backend (Node.js + TypeScript)
+
 - ✅ Express API with proper structure
 - ✅ Database connection pooling
 - ✅ Basic CRUD endpoints (list, get, update)
@@ -129,6 +147,7 @@ To save you time, we've provided a fully working foundation:
 - ✅ Vitest test configuration
 
 ### Frontend (React + TypeScript)
+
 - ✅ React 18 with TypeScript
 - ✅ Vite build tooling
 - ✅ TailwindCSS styling
@@ -137,6 +156,7 @@ To save you time, we've provided a fully working foundation:
 - ✅ Loading and error states
 
 ### Infrastructure
+
 - ✅ Docker Compose orchestration
 - ✅ Automatic database seeding
 - ✅ Health checks
@@ -175,30 +195,31 @@ We use an **Entity-Attribute-Value (EAV)** pattern for flexible field definition
 
 ### Key Tables (11 total)
 
-| Table | Purpose | Rows Seeded |
-|-------|---------|-------------|
-| `ticketing_ticket` | Matter records | 10,000 |
-| `ticketing_ticket_field_value` | Field values (EAV table) | ~90,000 |
-| `ticketing_fields` | Field definitions | 9 |
-| `ticketing_cycle_time_histories` | Status transitions | Variable |
-| `ticketing_field_status_groups` | Status groups (To Do, In Progress, Done) | 3 |
-| `users` | User assignments | 5 |
-| ... + 5 more tables | Options, currencies, etc. | Various |
+| Table                            | Purpose                                  | Rows Seeded |
+| -------------------------------- | ---------------------------------------- | ----------- |
+| `ticketing_ticket`               | Matter records                           | 10,000      |
+| `ticketing_ticket_field_value`   | Field values (EAV table)                 | ~90,000     |
+| `ticketing_fields`               | Field definitions                        | 9           |
+| `ticketing_cycle_time_histories` | Status transitions                       | Variable    |
+| `ticketing_field_status_groups`  | Status groups (To Do, In Progress, Done) | 3           |
+| `users`                          | User assignments                         | 5           |
+| ... + 5 more tables              | Options, currencies, etc.                | Various     |
 
 ### 8 Field Types
 
-| Type | Storage Column | Example |
-|------|----------------|---------|
-| `text` | `text_value` or `string_value` | Subject, Description |
-| `number` | `number_value` | Case Number |
-| `select` | `select_reference_value_uuid` | Priority |
-| `date` | `date_value` | Due Date |
-| `currency` | `currency_value` (JSONB) | Contract Value |
-| `boolean` | `boolean_value` | Urgent flag |
-| `status` | `status_reference_value_uuid` | Matter Status |
-| `user` | `user_value` | Assigned To |
+| Type       | Storage Column                 | Example              |
+| ---------- | ------------------------------ | -------------------- |
+| `text`     | `text_value` or `string_value` | Subject, Description |
+| `number`   | `number_value`                 | Case Number          |
+| `select`   | `select_reference_value_uuid`  | Priority             |
+| `date`     | `date_value`                   | Due Date             |
+| `currency` | `currency_value` (JSONB)       | Contract Value       |
+| `boolean`  | `boolean_value`                | Urgent flag          |
+| `status`   | `status_reference_value_uuid`  | Matter Status        |
+| `user`     | `user_value`                   | Assigned To          |
 
 **📖 Full Details**: See [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for:
+
 - Complete table schemas with column descriptions
 - EAV pattern explanation
 - Sample SQL queries for sorting and search
@@ -254,17 +275,20 @@ PATCH /api/v1/matters/:id
 ### What You'll Add
 
 **Sorting**:
+
 ```http
 GET /api/v1/matters?sortBy=case_number&sortOrder=asc
 GET /api/v1/matters?sortBy=status&sortOrder=desc
 ```
 
 **Search**:
+
 ```http
 GET /api/v1/matters?search=contract&page=1&limit=25
 ```
 
 **Cycle Time/SLA** (added to response):
+
 ```json
 {
   "data": [{
@@ -287,6 +311,7 @@ GET /api/v1/matters?search=contract&page=1&limit=25
 We've configured Vitest for you. You'll write the actual tests.
 
 **Run tests**:
+
 ```bash
 cd backend
 npm test
@@ -299,6 +324,7 @@ npm test -- --watch
 ```
 
 **What to test**:
+
 - ✅ Cycle time calculations (NULL handling, edge cases)
 - ✅ SLA determination logic
 - ✅ Sorting with different field types
@@ -315,17 +341,20 @@ npm test -- --watch
 **You may use AI tools** (GitHub Copilot, ChatGPT, Claude, etc.), but:
 
 ### ✅ We Expect
+
 - Honest disclosure of which tools you used
 - Explanation of what was AI-generated vs. human-written
 - Justification for using AI for specific parts
 - **Full accountability** for all submitted code
 
 ### ❌ Unacceptable
+
 - Blindly copying AI output without review
 - Submitting code you don't understand
 - Not testing AI-generated code
 
 ### Good Example Disclosure
+
 > "I used GitHub Copilot to generate the initial cycle time query structure, but I rewrote the NULL handling logic and added edge case tests manually. The duration formatting function was AI-assisted but I modified it to handle our specific requirements (in-progress matters, very large durations). I am confident in the correctness and can explain every line."
 
 ---
@@ -335,6 +364,7 @@ npm test -- --watch
 Before you submit, make sure:
 
 ### Implementation
+
 - [ ] Cycle time & SLA working correctly
 - [ ] Sorting works for ALL columns
 - [ ] Search works across all field types
@@ -342,6 +372,7 @@ Before you submit, make sure:
 - [ ] Edge cases handled (NULL, empty, missing data)
 
 ### Code Quality
+
 - [ ] No TypeScript errors (`npm run build` succeeds in both backend & frontend)
 - [ ] No linting errors (`npm run lint` passes)
 - [ ] Code follows existing patterns
@@ -349,6 +380,7 @@ Before you submit, make sure:
 - [ ] Error handling throughout
 
 ### Documentation
+
 - [ ] README.md updated with your approach
 - [ ] Scalability analysis included (specific, quantified)
 - [ ] AI tool usage disclosed (if applicable)
@@ -356,12 +388,14 @@ Before you submit, make sure:
 - [ ] Setup instructions verified
 
 ### Testing
+
 - [ ] Application runs with `docker compose up`
 - [ ] Tests pass with `npm test`
 - [ ] Edge cases tested
 - [ ] Integration tests included
 
 ### Performance
+
 - [ ] No N+1 query problems
 - [ ] Efficient SQL queries
 - [ ] Proper index usage
@@ -441,34 +475,40 @@ matter-management-mvp/
 We evaluate across these dimensions:
 
 ### 1. Code Quality (25%)
+
 - Clean, maintainable code
 - TypeScript best practices
 - Follows SOLID principles
 - Consistent patterns
 
 ### 2. Production Readiness (20%)
+
 - Comprehensive error handling
 - Input validation
 - Logging with context
 - Edge case handling
 
 ### 3. Security (15%)
+
 - SQL injection prevention
 - Input sanitization
 - Safe error messages
 
 ### 4. Testing (20%)
+
 - Unit and integration tests
 - Edge case coverage
 - Test quality and design
 
 ### 5. System Design (15%)
+
 - Query optimization
 - Scalability thinking
 - Caching strategy
 - Trade-off awareness
 
 ### 6. Documentation (5%)
+
 - Clear explanations
 - Decision justifications
 - Scalability analysis

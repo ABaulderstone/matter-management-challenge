@@ -4,7 +4,9 @@ import {
   formatDate,
   formatBoolean,
   getStatusBadgeColor,
+  getSLABadgeColor,
 } from '../utils/formatting';
+import Badge from './Badge';
 
 interface MatterTableProps {
   matters: Matter[];
@@ -13,23 +15,58 @@ interface MatterTableProps {
   onSort: (column: string) => void;
 }
 
-export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableProps) {
+export function MatterTable({
+  matters,
+  sortBy,
+  sortOrder,
+  onSort,
+}: MatterTableProps) {
   const renderSortIcon = (column: string) => {
     if (sortBy !== column) {
       return (
-        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        <svg
+          className="w-4 h-4 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+          />
         </svg>
       );
     }
-    
+
     return sortOrder === 'asc' ? (
-      <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      <svg
+        className="w-4 h-4 text-blue-600"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M5 15l7-7 7 7"
+        />
       </svg>
     ) : (
-      <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      <svg
+        className="w-4 h-4 text-blue-600"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M19 9l-7 7-7-7"
+        />
       </svg>
     );
   };
@@ -40,34 +77,43 @@ export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableP
 
     switch (field.fieldType) {
       case 'currency':
-        return <span className="font-medium">{formatCurrency(field.value as CurrencyValue | null)}</span>;
-      
+        return (
+          <span className="font-medium">
+            {formatCurrency(field.value as CurrencyValue | null)}
+          </span>
+        );
+
       case 'date':
         return <span>{formatDate(field.value as string | null)}</span>;
-      
+
       case 'boolean':
         return (
           <span className={field.value ? 'text-green-600' : 'text-gray-400'}>
             {formatBoolean(field.value as boolean | null)}
           </span>
         );
-      
+
       case 'status':
         return (
-          <span
-            className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(
-              field.displayValue || ''
-            )}`}
-          >
+          // <span
+          //   className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(
+          //     field.displayValue || ''
+          //   )}`}
+          // >
+          //   {field.displayValue}
+          // </span>
+          <Badge customClasses={getStatusBadgeColor(field.displayValue ?? '')}>
             {field.displayValue}
-          </span>
+          </Badge>
         );
-      
+
       case 'user':
         return <span>{field.displayValue}</span>;
-      
+
       default:
-        return <span>{field.displayValue || String(field.value) || 'N/A'}</span>;
+        return (
+          <span>{field.displayValue || String(field.value) || 'N/A'}</span>
+        );
     }
   };
 
@@ -87,8 +133,12 @@ export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableP
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No matters found</h3>
-        <p className="mt-1 text-sm text-gray-500">Try adjusting your search criteria.</p>
+        <h3 className="mt-2 text-sm font-medium text-gray-900">
+          No matters found
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Try adjusting your search criteria.
+        </p>
       </div>
     );
   }
@@ -130,11 +180,9 @@ export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableP
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Resolution Time
-              <span className="text-xs text-orange-600 ml-2">(TODO)</span>
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               SLA
-              <span className="text-xs text-orange-600 ml-2">(TODO)</span>
             </th>
           </tr>
         </thead>
@@ -169,13 +217,15 @@ export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableP
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                 {/* TODO: Display formatted resolution time (e.g., "2h 30m", "3d 5h") */}
-                <span className="italic">Not implemented</span>
+                <span>{matter.cycleTime?.resolutionTimeFormatted}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 {/* TODO: Display SLA badge (In Progress/Met/Breached) with appropriate colors */}
-                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-500 italic">
-                  Not implemented
-                </span>
+                <Badge
+                  customClasses={getSLABadgeColor(matter.sla ?? 'In Progress')}
+                >
+                  {matter.sla}
+                </Badge>
               </td>
             </tr>
           ))}
@@ -184,4 +234,3 @@ export function MatterTable({ matters, sortBy, sortOrder, onSort }: MatterTableP
     </div>
   );
 }
-

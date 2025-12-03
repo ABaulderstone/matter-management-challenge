@@ -383,14 +383,14 @@ export class MatterRepo {
                   AND to_status_id IN (SELECT id FROM done_statuses)
                 GROUP BY ticket_id
               )
-
-            SELECT
-              ft.ticket_id,
-              ft.first_transition_at,
-              fd.first_done_at,
-              fd.first_done_at - ft.first_transition_at AS cycle_time
-            FROM first_transition ft
-            JOIN first_done fd ON ft.ticket_id = fd.ticket_id;
+                SELECT
+                  ft.ticket_id,
+                  ft.first_transition_at,
+                  fd.first_done_at,
+                  fd.first_done_at - ft.first_transition_at AS cycle_time_to_done,
+                  NOW() - ft.first_transition_at AS cycle_time_to_now
+                FROM first_transition ft
+                LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id;
             `,
         [ticketId],
       );

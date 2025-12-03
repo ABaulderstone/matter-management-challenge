@@ -387,8 +387,8 @@ export class MatterRepo {
                   ft.ticket_id,
                   ft.first_transition_at,
                   fd.first_done_at,
-                  fd.first_done_at - ft.first_transition_at AS cycle_time_to_done,
-                  NOW() - ft.first_transition_at AS cycle_time_to_now
+                  ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+                  ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
                 FROM first_transition ft
                 LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id;
             `,

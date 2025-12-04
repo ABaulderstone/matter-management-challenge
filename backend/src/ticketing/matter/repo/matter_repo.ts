@@ -45,7 +45,6 @@ export class MatterRepo {
       // Currently search is not implemented - add ILIKE queries with pg_trgm
       const searchCondition = '';
       const queryParams: (string | number)[] = [];
-      const paramIndex = 1;
 
       // Determine sort column
       let orderByClause = '';
@@ -55,7 +54,7 @@ export class MatterRepo {
         const fieldQueryResult = await client.query(
           `
             SELECT id AS field_id, field_type
-            F0ROM ticketing_fields
+            FROM ticketing_fields
             WHERE name = $1
           `,
           [sortBy],
@@ -71,22 +70,24 @@ export class MatterRepo {
 
         // should type this as const somewhere
         const valueColumns: Record<string, string> = {
-          text: 'string_value',
-          number: 'number_value',
-          select: 'select_reference_value_uuid',
-          date: 'date_value',
-          currency: `(currency_value -->'amount'::numeric`, // get the numeric part of the currency json for sorting
-          boolean: 'boolean_value',
-          status: 'status_reference_value_uuid',
-          user: 'user_value',
+          text: 'ttfv.text_value',
+          number: 'ttfv.number_value',
+          select: 'ttfv.select_reference_value_uuid',
+          date: 'ttfv.date_value',
+          currency: `(ttfv.currency_value->>'amount')::numeric`,
+          boolean: 'ttfv.boolean_value',
+          status: 'ttfv.status_reference_value_uuid',
+          user: 'ttfv.user_value',
         };
 
         fieldValueCol = valueColumns[fieldType];
+        // to stop n + 1 issue
         fieldJoinQuery = `
             LEFT JOIN ticketing_ticket_field_value ttfv 
             ON ttfv.ticket_id = tt.id
-            AND ttfv.ticket_field_id = ${fieldId}
+            AND ttfv.ticket_field_id = $${queryParams.length + 1}
          `;
+        queryParams.push(fieldId);
         orderByClause = `${fieldValueCol} ${sortOrder.toUpperCase()} NULLS LAST`;
       } else {
         orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()}`;
@@ -99,53 +100,42 @@ export class MatterRepo {
         WHERE 1=1 ${searchCondition}
       `;
 
-      const countResult = await client.query(countQuery, queryParams);
+      // TODO - add params back when search happens
+      const countResult = await client.query(countQuery);
       const total = parseInt(countResult.rows[0].total);
 
       // Get matters
       const mattersQuery = `
-          SELECT 
-          tt.id, 
-          tt.board_id, 
-          tt.created_at, 
-          tt.updated_at, 
-            jsonb_object_agg(
-              tf.name, 
-              COALESCE(
-              ttfv.string_value, 
-              ttfv.text_value, 
-              ttfv.number_value::text, 
-              ttfv.date_value::text, 
-              ttfv.boolean_value::text, 
-              ttfv.currency_value::text,
-              ttfv.user_value::text,
-              ttfv.select_reference_value_uuid::text, 
-              ttfv.status_reference_value_uuid::text
-              )
-            ) AS fields 
-          FROM ticketing_ticket tt
-          ${fieldJoinQuery}
-          LEFT JOIN ticketing_ticket_field_value ttfv
-          ON ttfv.ticket_id = tt.id
-          LEFT JOIN ticketing_fields tf
-          ON tf.id = ttfv.ticket_field_id
-          GROUP BY tt.id
-          ORDER BY ${orderByClause}
-          LIMIT $${paramIndex}
-          OFFSET $${paramIndex + 1}
+        SELECT
+          tt.id,
+          tt.board_id,
+          tt.created_at,
+          tt.updated_at
+        FROM ticketing_ticket tt
+        ${fieldJoinQuery}
+        WHERE 1=1 ${searchCondition}
+        ORDER BY ${orderByClause}
+        LIMIT $${queryParams.length + 1}
+        OFFSET $${queryParams.length + 2}
       `;
 
       queryParams.push(limit, offset);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
-      const matters: Matter[] = mattersResult.rows.map((row) => ({
-        id: row.id,
-        boardId: row.board_id,
-        fields: row.fields,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }));
-      console.log(matters[0]);
+      const matters: Matter[] = [];
+
+      //  willing to trade off 1 + paginated results here vs jsonb nightmare
+      for (const matterRow of mattersResult.rows) {
+        const fields = await this.getMatterFields(client, matterRow.id);
+
+        matters.push({
+          id: matterRow.id,
+          boardId: matterRow.board_id,
+          fields,
+          createdAt: matterRow.created_at,
+          updatedAt: matterRow.updated_at,
+        });
+      }
       return { matters, total };
     } finally {
       client.release();

@@ -9,6 +9,7 @@ import {
 } from '../../types.js';
 import logger from '../../../utils/logger.js';
 import { PoolClient } from 'pg';
+import { number } from 'zod';
 
 export class MatterRepo {
   /**
@@ -47,18 +48,54 @@ export class MatterRepo {
       const paramIndex = 1;
 
       // Determine sort column
-      let orderByClause = 'tt.created_at DESC';
-      if (sortBy === 'created_at') {
-        orderByClause = `tt.created_at ${sortOrder.toUpperCase()}`;
-      } else if (sortBy === 'updated_at') {
-        orderByClause = `tt.updated_at ${sortOrder.toUpperCase()}`;
+      let orderByClause = '';
+      let fieldValueCol = '';
+      let fieldJoinQuery = '';
+      if (sortBy !== 'created_at' && sortBy !== 'updated_at') {
+        const fieldQueryResult = await client.query(
+          `
+            SELECT id AS field_id, field_type
+            F0ROM ticketing_fields
+            WHERE name = $1
+          `,
+          [sortBy],
+        );
+
+        // shouldn't be possible yet, but could be a problem with SLA
+        if (fieldQueryResult.rowCount === 0) {
+          throw new Error('Tried to sort on invalid field');
+        }
+
+        // pedantic snake to camel case
+        const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
+
+        // should type this as const somewhere
+        const valueColumns: Record<string, string> = {
+          text: 'string_value',
+          number: 'number_value',
+          select: 'select_reference_value_uuid',
+          date: 'date_value',
+          currency: `(currency_value -->'amount'::numeric`, // get the numeric part of the currency json for sorting
+          boolean: 'boolean_value',
+          status: 'status_reference_value_uuid',
+          user: 'user_value',
+        };
+
+        fieldValueCol = valueColumns[fieldType];
+        fieldJoinQuery = `
+            LEFT JOIN ticketing_ticket_field_value ttfv 
+            ON ttfv.ticket_id = tt.id
+            AND ttfv.ticket_field_id = ${fieldId}
+         `;
+        orderByClause = `${fieldValueCol} ${sortOrder.toUpperCase()} NULLS LAST`;
+      } else {
+        orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()}`;
       }
 
       // Get total count
       const countQuery = `
         SELECT COUNT(DISTINCT tt.id) as total
         FROM ticketing_ticket tt
-        LEFT JOIN ticketing_ticket_field_value ttfv ON tt.id = ttfv.ticket_id
         WHERE 1=1 ${searchCondition}
       `;
 
@@ -67,32 +104,47 @@ export class MatterRepo {
 
       // Get matters
       const mattersQuery = `
-        SELECT DISTINCT tt.id, tt.board_id, tt.created_at, tt.updated_at
-        FROM ticketing_ticket tt
-        LEFT JOIN ticketing_ticket_field_value ttfv ON tt.id = ttfv.ticket_id
-        WHERE 1=1 ${searchCondition}
-        ORDER BY ${orderByClause}
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+          SELECT 
+          tt.id, 
+          tt.board_id, 
+          tt.created_at, 
+          tt.updated_at, 
+            jsonb_object_agg(
+              tf.name, 
+              COALESCE(
+              ttfv.string_value, 
+              ttfv.text_value, 
+              ttfv.number_value::text, 
+              ttfv.date_value::text, 
+              ttfv.boolean_value::text, 
+              ttfv.currency_value::text,
+              ttfv.user_value::text,
+              ttfv.select_reference_value_uuid::text, 
+              ttfv.status_reference_value_uuid::text
+              )
+            ) AS fields 
+          FROM ticketing_ticket tt
+          ${fieldJoinQuery}
+          LEFT JOIN ticketing_ticket_field_value ttfv
+          ON ttfv.ticket_id = tt.id
+          LEFT JOIN ticketing_fields tf
+          ON tf.id = ttfv.ticket_field_id
+          GROUP BY tt.id
+          ORDER BY ${orderByClause}
+          LIMIT $${paramIndex}
+          OFFSET $${paramIndex + 1}
       `;
 
       queryParams.push(limit, offset);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
-      // Get all fields for these matters
-      const matters: Matter[] = [];
-
-      for (const matterRow of mattersResult.rows) {
-        const fields = await this.getMatterFields(client, matterRow.id);
-
-        matters.push({
-          id: matterRow.id,
-          boardId: matterRow.board_id,
-          fields,
-          createdAt: matterRow.created_at,
-          updatedAt: matterRow.updated_at,
-        });
-      }
-
+      const matters: Matter[] = mattersResult.rows.map((row) => ({
+        id: row.id,
+        boardId: row.board_id,
+        fields: row.fields,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
       return { matters, total };
     } finally {
       client.release();

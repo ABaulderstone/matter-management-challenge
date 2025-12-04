@@ -7,6 +7,7 @@ import {
   getSLABadgeColor,
 } from '../utils/formatting';
 import Badge from './Badge';
+import SortIcon from './SortIcon';
 
 interface MatterTableProps {
   matters: Matter[];
@@ -21,56 +22,6 @@ export function MatterTable({
   sortOrder,
   onSort,
 }: MatterTableProps) {
-  const renderSortIcon = (column: string) => {
-    if (sortBy !== column) {
-      return (
-        <svg
-          className="w-4 h-4 text-gray-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-          />
-        </svg>
-      );
-    }
-
-    return sortOrder === 'asc' ? (
-      <svg
-        className="w-4 h-4 text-blue-600"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M5 15l7-7 7 7"
-        />
-      </svg>
-    ) : (
-      <svg
-        className="w-4 h-4 text-blue-600"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M19 9l-7 7-7-7"
-        />
-      </svg>
-    );
-  };
-
   const renderFieldValue = (matter: Matter, fieldName: string) => {
     const field = matter.fields[fieldName];
     if (!field) return <span className="text-gray-400">N/A</span>;
@@ -95,13 +46,6 @@ export function MatterTable({
 
       case 'status':
         return (
-          // <span
-          //   className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(
-          //     field.displayValue || ''
-          //   )}`}
-          // >
-          //   {field.displayValue}
-          // </span>
           <Badge customClasses={getStatusBadgeColor(field.displayValue ?? '')}>
             {field.displayValue}
           </Badge>
@@ -154,7 +98,11 @@ export function MatterTable({
             >
               <div className="flex items-center gap-1">
                 Subject
-                {renderSortIcon('subject')}
+                <SortIcon
+                  column="subject"
+                  sortOrder={sortOrder}
+                  sortBy={sortBy}
+                />
               </div>
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">

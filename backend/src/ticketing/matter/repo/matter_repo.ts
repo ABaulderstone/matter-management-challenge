@@ -145,6 +145,7 @@ export class MatterRepo {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
+      console.log(matters[0]);
       return { matters, total };
     } finally {
       client.release();

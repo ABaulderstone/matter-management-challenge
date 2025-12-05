@@ -88,8 +88,14 @@ export class MatterRepo {
           const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
           fieldJoinQuery += joinSql;
 
+          console.log(fieldJoinQuery);
           orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
-          console.log(orderByClause);
+          console.log({
+            sortBy,
+            fieldType,
+            fieldId,
+            orderByClause,
+          });
       }
 
       // Get total count
@@ -119,7 +125,7 @@ export class MatterRepo {
       `;
 
       queryParams.push(limit, offset);
-      console.log(queryParams);
+      console.log(mattersQuery);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
       const matters: Matter[] = [];
@@ -137,6 +143,9 @@ export class MatterRepo {
         });
       }
       return { matters, total };
+    } catch (e) {
+      console.log('??');
+      logger.error(e);
     } finally {
       client.release();
     }
@@ -465,6 +474,7 @@ export class MatterRepo {
         };
 
       case 'date':
+        console.log('HIT DATE');
         return {
           orderByExpr: `ttfv.date_value`,
           joinSql: '',

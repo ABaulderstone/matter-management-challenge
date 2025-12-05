@@ -47,45 +47,49 @@ export class MatterRepo {
 
       // Determine sort column
       let orderByClause = '';
-      let fieldValueCol = '';
       let fieldJoinQuery = '';
-      console.log(sortBy);
-      if (sortBy !== 'created_at' && sortBy !== 'updated_at') {
-        const fieldQueryResult = await client.query(
-          `
+
+      switch (sortBy) {
+        case 'created_at':
+        case 'updated_at':
+          orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()} NULLS LAST`;
+          break;
+
+        // all field queries are default
+        default:
+          const fieldQueryResult = await client.query(
+            `
             SELECT id AS field_id, field_type
             FROM ticketing_fields
             WHERE name = $1
           `,
-          [sortBy],
-        );
+            [sortBy],
+          );
 
-        // shouldn't be possible yet, but could be a problem with SLA
-        if (fieldQueryResult.rowCount === 0) {
-          logger.error('No result for sort');
-          throw new Error('Tried to sort on invalid field');
-        }
+          // shouldn't be possible yet, but could be a problem with SLA
+          if (fieldQueryResult.rowCount === 0) {
+            logger.error('No result for sort');
+            throw new Error('Tried to sort on invalid field');
+          }
 
-        // pedantic snake to camel case
-        const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
-        console.log(fieldId, fieldType);
+          // pedantic snake to camel case
+          const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
+          console.log(fieldId, fieldType);
 
-        // to stop n + 1 issue
-        fieldJoinQuery = `
+          // to stop n + 1 issue
+          fieldJoinQuery = `
         LEFT JOIN ticketing_ticket_field_value ttfv 
         ON ttfv.ticket_id = tt.id
         AND ttfv.ticket_field_id = $${queryParams.length + 1}
         `;
-        queryParams.push(fieldId);
+          queryParams.push(fieldId);
 
-        // each field type needs a different kind of order by
-        const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
-        fieldJoinQuery += joinSql;
+          // each field type needs a different kind of order by
+          const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
+          fieldJoinQuery += joinSql;
 
-        orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
-        console.log(orderByClause);
-      } else {
-        orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()}`;
+          orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
+          console.log(orderByClause);
       }
 
       // Get total count

@@ -69,29 +69,21 @@ export class MatterRepo {
         // pedantic snake to camel case
         const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
         console.log(fieldId, fieldType);
-        // should type this as const somewhere
-        const valueColumns: Record<string, string> = {
-          text: 'ttfv.text_value',
-          number: 'ttfv.number_value',
-          select: 'ttfv.select_reference_value_uuid',
-          date: 'ttfv.date_value',
-          currency: `(ttfv.currency_value->>'amount')::numeric`,
-          boolean: 'ttfv.boolean_value',
-          status: 'so.label',
-          user: 'ttfv.user_value',
-        };
-
-        fieldValueCol = valueColumns[fieldType];
 
         // to stop n + 1 issue
         fieldJoinQuery = `
-            LEFT JOIN ticketing_ticket_field_value ttfv 
-            ON ttfv.ticket_id = tt.id
-            AND ttfv.ticket_field_id = $${queryParams.length + 1}
-         `;
-
+        LEFT JOIN ticketing_ticket_field_value ttfv 
+        ON ttfv.ticket_id = tt.id
+        AND ttfv.ticket_field_id = $${queryParams.length + 1}
+        `;
         queryParams.push(fieldId);
-        orderByClause = `${fieldValueCol} ${sortOrder.toUpperCase()} NULLS LAST`;
+
+        // each field type needs a different kind of order by
+        const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
+        fieldJoinQuery += joinSql;
+
+        orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
+        console.log(orderByClause);
       } else {
         orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()}`;
       }
@@ -449,6 +441,82 @@ export class MatterRepo {
       return cycleTimeResult.rows[0];
     } finally {
       client.release();
+    }
+  }
+  // TODO: store types
+  private buildSortSql(
+    fieldType: 'text' | 'number' | 'boolean' | 'date' | 'currency' | 'user' | 'select' | 'status',
+  ): { orderByExpr: string; joinSql: string } {
+    switch (fieldType) {
+      case 'text':
+        return {
+          orderByExpr: `ttfv.text_value`,
+          joinSql: '',
+        };
+
+      case 'number':
+        return {
+          orderByExpr: `ttfv.number_value`,
+          joinSql: '',
+        };
+
+      case 'date':
+        return {
+          orderByExpr: `ttfv.date_value`,
+          joinSql: '',
+        };
+
+      case 'boolean':
+        return {
+          orderByExpr: `ttfv.boolean_value`,
+          joinSql: '',
+        };
+
+      case 'currency':
+        return {
+          orderByExpr: `(ttfv.currency_value->>'amount')::numeric`,
+          joinSql: '',
+        };
+
+      case 'user':
+        return {
+          orderByExpr: `u_sort.last_name`,
+          joinSql: `
+          LEFT JOIN users u_sort
+            ON u_sort.id = ttfv.user_value
+        `,
+        };
+
+      case 'select':
+        return {
+          orderByExpr: `
+          CASE so.label
+            WHEN 'Low' THEN 1
+            WHEN 'Medium' THEN 2
+            WHEN 'High' THEN 3
+            WHEN 'Critical' THEN 4
+            ELSE 5
+          END
+        `,
+          joinSql: `
+          LEFT JOIN ticketing_field_options so
+            ON so.id = ttfv.select_reference_value_uuid
+        `,
+        };
+
+      case 'status':
+        return {
+          orderByExpr: `sg.name`,
+          joinSql: `
+          LEFT JOIN ticketing_field_status_options s
+            ON s.id = ttfv.status_reference_value_uuid
+          LEFT JOIN ticketing_field_status_groups sg
+            ON sg.id = s.group_id
+        `,
+        };
+
+      default:
+        throw new Error(`Unsupported sort field type: ${fieldType}`);
     }
   }
 }

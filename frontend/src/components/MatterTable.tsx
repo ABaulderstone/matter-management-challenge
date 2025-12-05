@@ -142,7 +142,7 @@ export function MatterTable({
             >
               Priority
               <SortIcon
-                column="Pirority"
+                column="Priority"
                 sortOrder={sortOrder}
                 sortBy={sortBy}
               />
@@ -153,7 +153,7 @@ export function MatterTable({
             >
               Contract Value
               <SortIcon
-                column="Assigned To"
+                column="Contract Value"
                 sortOrder={sortOrder}
                 sortBy={sortBy}
               />

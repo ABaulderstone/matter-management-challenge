@@ -9,7 +9,6 @@ import {
 } from '../../types.js';
 import logger from '../../../utils/logger.js';
 import { PoolClient } from 'pg';
-import { number } from 'zod';
 
 export class MatterRepo {
   /**
@@ -50,6 +49,7 @@ export class MatterRepo {
       let orderByClause = '';
       let fieldValueCol = '';
       let fieldJoinQuery = '';
+      console.log(sortBy);
       if (sortBy !== 'created_at' && sortBy !== 'updated_at') {
         const fieldQueryResult = await client.query(
           `
@@ -62,12 +62,13 @@ export class MatterRepo {
 
         // shouldn't be possible yet, but could be a problem with SLA
         if (fieldQueryResult.rowCount === 0) {
+          logger.error('No result for sort');
           throw new Error('Tried to sort on invalid field');
         }
 
         // pedantic snake to camel case
         const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
-
+        console.log(fieldId, fieldType);
         // should type this as const somewhere
         const valueColumns: Record<string, string> = {
           text: 'ttfv.text_value',
@@ -76,17 +77,19 @@ export class MatterRepo {
           date: 'ttfv.date_value',
           currency: `(ttfv.currency_value->>'amount')::numeric`,
           boolean: 'ttfv.boolean_value',
-          status: 'ttfv.status_reference_value_uuid',
+          status: 'so.label',
           user: 'ttfv.user_value',
         };
 
         fieldValueCol = valueColumns[fieldType];
+
         // to stop n + 1 issue
         fieldJoinQuery = `
             LEFT JOIN ticketing_ticket_field_value ttfv 
             ON ttfv.ticket_id = tt.id
             AND ttfv.ticket_field_id = $${queryParams.length + 1}
          `;
+
         queryParams.push(fieldId);
         orderByClause = `${fieldValueCol} ${sortOrder.toUpperCase()} NULLS LAST`;
       } else {
@@ -120,6 +123,7 @@ export class MatterRepo {
       `;
 
       queryParams.push(limit, offset);
+      console.log(queryParams);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
       const matters: Matter[] = [];

@@ -105,26 +105,76 @@ export function MatterTable({
                 />
               </div>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('Case Number')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Case Number
+              <SortIcon
+                column="Case Number"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              // onClick={() => onSort('status')}
+
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Status
+              {/* <SortIcon column="status" sortOrder={sortOrder} sortBy={sortBy} /> */}
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('Assigned To')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Assigned To
+              <SortIcon
+                column="Assigned To"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            {/* TODO: This sorts alphabetically - need to sort in serverity order */}
+            <th
+              onClick={() => onSort('Priority')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Priority
+              <SortIcon
+                column="Pirority"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('Contract Value')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Contract Value
+              <SortIcon
+                column="Assigned To"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('Due Date')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Due Date
+              <SortIcon
+                column="Due Date"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('Urgent')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Urgent
+              <SortIcon column="Urgent" sortOrder={sortOrder} sortBy={sortBy} />
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Resolution Time

@@ -142,10 +142,8 @@ export class MatterRepo {
           updatedAt: matterRow.updated_at,
         });
       }
+      console.log(total);
       return { matters, total };
-    } catch (e) {
-      console.log('??');
-      logger.error(e);
     } finally {
       client.release();
     }

@@ -8,6 +8,7 @@ import {
   CurrencyValue,
   UserValue,
 } from '../../types.js';
+import logger from '../../../utils/logger.js';
 
 export class MatterService {
   private matterRepo: MatterRepo;
@@ -21,40 +22,44 @@ export class MatterService {
   async getMatters(params: MatterListParams): Promise<MatterListResponse> {
     const { page = 1, limit = 25 } = params;
     const { matters, total } = await this.matterRepo.getMatters(params);
-
     // Calculate cycle time and SLA for each matter
-    const enrichedMatters = await Promise.all(
-      matters.map(async (matter) => {
-        // Get current status group name
-        const statusField = matter.fields['Status'];
-        let statusGroupName: string | null = null;
+    try {
+      const enrichedMatters = await Promise.all(
+        matters.map(async (matter) => {
+          // Get current status group name
+          const statusField = matter.fields['Status'];
+          let statusGroupName: string | null = null;
 
-        if (statusField && statusField.value && typeof statusField.value === 'object') {
-          statusGroupName = (statusField.value as StatusValue).groupName || null;
-        }
+          if (statusField && statusField.value && typeof statusField.value === 'object') {
+            statusGroupName = (statusField.value as StatusValue).groupName || null;
+          }
 
-        const { cycleTime, sla } = await this.cycleTimeService.calculateCycleTimeAndSLA(
-          matter.id,
-          statusGroupName,
-        );
+          const { cycleTime, sla } = await this.cycleTimeService.calculateCycleTimeAndSLA(
+            matter.id,
+            statusGroupName,
+          );
 
-        return {
-          ...matter,
-          cycleTime,
-          sla,
-        };
-      }),
-    );
+          return {
+            ...matter,
+            cycleTime,
+            sla,
+          };
+        }),
+      );
 
-    const totalPages = Math.ceil(total / limit);
+      const totalPages = Math.ceil(total / limit);
 
-    return {
-      data: enrichedMatters,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+      return {
+        data: enrichedMatters,
+        total,
+        page,
+        limit,
+        totalPages,
+      };
+    } catch (e) {
+      logger.error(e);
+      console.log(e);
+    }
   }
 
   async getMatterById(matterId: string): Promise<Matter | null> {

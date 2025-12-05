@@ -62,23 +62,30 @@ export class CycleTimeService {
 
   // Helper method for formatting durations (candidates will implement this)
   private _formatDuration(_durationMs: number, _isInProgress: boolean): string {
-    // for readability rather than neccesity
-    const msInSecond = 1000;
-    const msInMinute = msInSecond * 60;
-    const msInHour = msInMinute * 60;
-    const msInDay = 24 * msInHour;
-    const d = Math.floor(_durationMs / msInDay);
-    let remainder = _durationMs % msInDay;
-    const h = Math.floor(remainder / msInHour);
-    remainder %= msInHour;
-    const m = Math.floor(remainder / msInMinute);
-    remainder %= msInMinute;
-    const s = Math.floor(remainder / msInSecond);
-    // probably no need to be accurate to ms
+    try {
+      // for readability rather than neccesity
+      const msInSecond = 1000;
+      const msInMinute = msInSecond * 60;
+      const msInHour = msInMinute * 60;
+      const msInDay = 24 * msInHour;
+      const d = Math.floor(_durationMs / msInDay);
+      let remainder = _durationMs % msInDay;
+      const h = Math.floor(remainder / msInHour);
+      remainder %= msInHour;
+      const m = Math.floor(remainder / msInMinute);
+      remainder %= msInMinute;
+      const s = Math.floor(remainder / msInSecond);
+      // probably no need to be accurate to ms
 
-    const [largestUnit, nextUnit] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
-
-    return `${_isInProgress ? 'In Progress: ' : ''}${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
+      const [largestUnit, nextUnit] = Object.entries({ d, h, m, s }).filter(
+        (entry) => entry[1] > 0,
+      );
+      console.log(largestUnit, nextUnit);
+      return `${_isInProgress ? 'In Progress: ' : ''}${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
+    } catch (e) {
+      logger.error(e);
+      return 'N/A';
+    }
   }
 
   private _formatSLAText(_durationMs: number) {

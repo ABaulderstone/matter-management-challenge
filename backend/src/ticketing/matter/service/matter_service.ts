@@ -23,43 +23,39 @@ export class MatterService {
     const { page = 1, limit = 25 } = params;
     const { matters, total } = await this.matterRepo.getMatters(params);
     // Calculate cycle time and SLA for each matter
-    try {
-      const enrichedMatters = await Promise.all(
-        matters.map(async (matter) => {
-          // Get current status group name
-          const statusField = matter.fields['Status'];
-          let statusGroupName: string | null = null;
 
-          if (statusField && statusField.value && typeof statusField.value === 'object') {
-            statusGroupName = (statusField.value as StatusValue).groupName || null;
-          }
+    const enrichedMatters = await Promise.all(
+      matters.map(async (matter) => {
+        // Get current status group name
+        const statusField = matter.fields['Status'];
+        let statusGroupName: string | null = null;
 
-          const { cycleTime, sla } = await this.cycleTimeService.calculateCycleTimeAndSLA(
-            matter.id,
-            statusGroupName,
-          );
+        if (statusField && statusField.value && typeof statusField.value === 'object') {
+          statusGroupName = (statusField.value as StatusValue).groupName || null;
+        }
 
-          return {
-            ...matter,
-            cycleTime,
-            sla,
-          };
-        }),
-      );
+        const { cycleTime, sla } = await this.cycleTimeService.calculateCycleTimeAndSLA(
+          matter.id,
+          statusGroupName,
+        );
 
-      const totalPages = Math.ceil(total / limit);
+        return {
+          ...matter,
+          cycleTime,
+          sla,
+        };
+      }),
+    );
 
-      return {
-        data: enrichedMatters,
-        total,
-        page,
-        limit,
-        totalPages,
-      };
-    } catch (e) {
-      logger.error(e);
-      console.log(e);
-    }
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: enrichedMatters,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async getMatterById(matterId: string): Promise<Matter | null> {

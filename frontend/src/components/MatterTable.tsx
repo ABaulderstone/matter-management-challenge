@@ -117,12 +117,11 @@ export function MatterTable({
               />
             </th>
             <th
-              // onClick={() => onSort('status')}
-
+              onClick={() => onSort('Status')}
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
             >
               Status
-              {/* <SortIcon column="status" sortOrder={sortOrder} sortBy={sortBy} /> */}
+              <SortIcon column="Status" sortOrder={sortOrder} sortBy={sortBy} />
             </th>
             <th
               onClick={() => onSort('Assigned To')}

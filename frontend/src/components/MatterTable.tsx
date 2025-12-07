@@ -134,7 +134,7 @@ export function MatterTable({
                 sortBy={sortBy}
               />
             </th>
-            {/* TODO: This sorts alphabetically - need to sort in serverity order */}
+
             <th
               onClick={() => onSort('Priority')}
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -175,11 +175,23 @@ export function MatterTable({
               Urgent
               <SortIcon column="Urgent" sortOrder={sortOrder} sortBy={sortBy} />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('duration')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               Resolution Time
+              <SortIcon
+                column="duration"
+                sortOrder={sortOrder}
+                sortBy={sortBy}
+              />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th
+              onClick={() => onSort('sla')}
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+            >
               SLA
+              <SortIcon column="sla" sortOrder={sortOrder} sortBy={sortBy} />
             </th>
           </tr>
         </thead>

@@ -77,11 +77,19 @@ export class CycleTimeService {
       const s = Math.floor(remainder / msInSecond);
       // probably no need to be accurate to ms
 
-      const [largestUnit, nextUnit] = Object.entries({ d, h, m, s }).filter(
-        (entry) => entry[1] > 0,
-      );
-      console.log(largestUnit, nextUnit);
-      return `${_isInProgress ? 'In Progress: ' : ''}${largestUnit[1]}${largestUnit[0]} ${nextUnit[1]}${nextUnit[0]}`;
+      const [largest, next] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
+
+      let subString;
+
+      const [largestUnit, luAmount] = largest;
+      const [nextUnit, nuAmount] = next ?? ['', ''];
+
+      if (largestUnit === 'd' && luAmount > 5) {
+        subString = '5d+';
+      } else {
+        subString = (luAmount + largestUnit + ' ' + nuAmount + nextUnit).trim();
+      }
+      return `${_isInProgress ? 'In Progress: ' : ''}${subString}`;
     } catch (e) {
       logger.error(e);
       return 'N/A';

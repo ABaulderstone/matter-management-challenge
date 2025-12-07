@@ -9,8 +9,13 @@ import {
 } from '../../types.js';
 import logger from '../../../utils/logger.js';
 import { PoolClient } from 'pg';
+import { config } from '../../../utils/config.js';
 
 export class MatterRepo {
+  private _slaThresholdMs: number;
+  constructor() {
+    this._slaThresholdMs = config.SLA_THRESHOLD_HOURS * 60 * 60 * 1000;
+  }
   /**
    * Get paginated list of matters with search and sorting
    *
@@ -54,6 +59,12 @@ export class MatterRepo {
         case 'updated_at':
           orderByClause = `tt.${sortBy} ${sortOrder.toUpperCase()} NULLS LAST`;
           break;
+        case 'sla':
+        case 'duration':
+          const { orderByExpr: orderBy, joinSql: join } = this.buildSortSql(sortBy);
+          orderByClause = `${orderBy} ${sortOrder.toUpperCase()} NULLS LAST`;
+          fieldJoinQuery += join;
+          break;
 
         // all field queries are default
         default:
@@ -87,15 +98,7 @@ export class MatterRepo {
           // each field type needs a different kind of order by
           const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
           fieldJoinQuery += joinSql;
-
-          console.log(fieldJoinQuery);
           orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
-          console.log({
-            sortBy,
-            fieldType,
-            fieldId,
-            orderByClause,
-          });
       }
 
       // Get total count
@@ -142,7 +145,6 @@ export class MatterRepo {
           updatedAt: matterRow.updated_at,
         });
       }
-      console.log(total);
       return { matters, total };
     } finally {
       client.release();
@@ -456,7 +458,17 @@ export class MatterRepo {
   }
   // TODO: store types
   private buildSortSql(
-    fieldType: 'text' | 'number' | 'boolean' | 'date' | 'currency' | 'user' | 'select' | 'status',
+    fieldType:
+      | 'text'
+      | 'number'
+      | 'boolean'
+      | 'date'
+      | 'currency'
+      | 'user'
+      | 'select'
+      | 'status'
+      | 'duration'
+      | 'sla',
   ): { orderByExpr: string; joinSql: string } {
     switch (fieldType) {
       case 'text':
@@ -472,7 +484,6 @@ export class MatterRepo {
         };
 
       case 'date':
-        console.log('HIT DATE');
         return {
           orderByExpr: `ttfv.date_value`,
           joinSql: '',
@@ -526,10 +537,63 @@ export class MatterRepo {
             ON sg.id = s.group_id
         `,
         };
+      case 'duration':
+        return {
+          orderByExpr: 'COALESCE(ct.cycle_time_to_done, ct.cycle_time_to_now)',
+          joinSql: this.buildCycleTimeJoin(),
+        };
+      case 'sla':
+        return {
+          orderByExpr: `
+            CASE
+              WHEN ct.cycle_time_to_done IS NULL THEN 0
+              WHEN ct.cycle_time_to_done <= ${this._slaThresholdMs} THEN 1 
+              ELSE 2
+            END
+          `,
+          joinSql: this.buildCycleTimeJoin(),
+        };
 
       default:
         throw new Error(`Unsupported sort field type: ${fieldType}`);
     }
+  }
+  private buildCycleTimeJoin(): string {
+    return `
+    LEFT JOIN (
+      WITH 
+        done_group AS (
+          SELECT id FROM ticketing_field_status_groups WHERE sequence = 3
+        ),
+        done_statuses AS (
+          SELECT id FROM ticketing_field_status_options
+          WHERE group_id IN (SELECT id FROM done_group)
+        ),
+        first_transition AS (
+          SELECT 
+            ticket_id,
+            MIN(transitioned_at) AS first_transition_at
+          FROM ticketing_cycle_time_histories
+          GROUP BY ticket_id
+        ),
+        first_done AS (
+          SELECT 
+            ticket_id,
+            MIN(transitioned_at) AS first_done_at
+          FROM ticketing_cycle_time_histories
+          WHERE to_status_id IN (SELECT id FROM done_statuses)
+          GROUP BY ticket_id
+        )
+      SELECT
+        ft.ticket_id,
+        ft.first_transition_at,
+        fd.first_done_at,
+        ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+        ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+      FROM first_transition ft
+      LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+    ) ct ON ct.ticket_id = tt.id
+  `;
   }
 }
 

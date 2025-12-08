@@ -16,6 +16,7 @@ export default function SearchBar({
   // search state is in parent no need for duplication of state or useEffect
   const timeoutRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target;
     if (timeoutRef.current) {
@@ -36,7 +37,7 @@ export default function SearchBar({
     onSearch('');
   };
   return (
-    <div className="relative flex content-start   gap-3 items-center w-full">
+    <div className="relative flex content-start gap-3 items-center w-full">
       <input
         ref={inputRef}
         onChange={handleChange}

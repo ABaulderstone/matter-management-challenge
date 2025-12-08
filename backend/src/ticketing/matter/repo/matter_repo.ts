@@ -45,14 +45,17 @@ export class MatterRepo {
     const client = await pool.connect();
 
     try {
-      // TODO: Implement search condition
-      // Currently search is not implemented - add ILIKE queries with pg_trgm
-      const searchCondition = '';
-      const queryParams: (string | number)[] = [];
+      const queryParams: (string | number | string[])[] = [];
 
       // Determine sort column
       let orderByClause = '';
       let fieldJoinQuery = '';
+      let searchCondition = '';
+      const searchIds = await this.getSearchIds(client, params);
+      if (searchIds.length > 0) {
+        searchCondition = `AND tt.id = ANY($${queryParams.length + 1})`;
+        queryParams.push(searchIds);
+      }
 
       switch (sortBy) {
         case 'created_at':
@@ -109,7 +112,7 @@ export class MatterRepo {
       `;
 
       // TODO - add params back when search happens
-      const countResult = await client.query(countQuery);
+      const countResult = await client.query(countQuery, queryParams);
       const total = parseInt(countResult.rows[0].total);
 
       // Get matters
@@ -128,7 +131,6 @@ export class MatterRepo {
       `;
 
       queryParams.push(limit, offset);
-      console.log(mattersQuery);
       const mattersResult = await client.query(mattersQuery, queryParams);
 
       const matters: Matter[] = [];
@@ -594,6 +596,33 @@ export class MatterRepo {
       LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
     ) ct ON ct.ticket_id = tt.id
   `;
+  }
+
+  private async getSearchIds(client: PoolClient, params: MatterListParams) {
+    if (params?.search?.trim()) {
+      const searchResult = await client.query(
+        `
+            SELECT DISTINCT ttfv.ticket_id
+            FROM ticketing_ticket_field_value ttfv 
+            LEFT JOIN ticketing_field_options so 
+              ON so.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_options s 
+              ON s.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_groups sg
+              ON sg.id = s.group_id
+            LEFT JOIN users u 
+              ON u.id = ttfv.user_value
+            WHERE 
+              ttfv.text_value ILIKE '%' || $1 || '%'
+            OR so.label ILIKE '%' || $1 || '%'
+            OR sg.name  ILIKE '%' || $1 || '%'
+            OR u.last_name ILIKE '%' || $1 || '%' 
+          `,
+        [params.search],
+      );
+      return searchResult.rows.map((r) => r.ticket_id);
+    }
+    return [] as string[];
   }
 }
 

@@ -52,4 +52,199 @@ const mattersQuery = `
 Again I was happy enough to leave the excess joins to the matter enrichment because it was only happening on 10-25 matters - not worth the trade off of joining everything at this stage.
 Although I again wondered about how the next part would impact my solution.
 
-This was working for all custom fields although I was hitting an issue with sorting by Due Date. I probably burnt another 30-40 minutes debugging my query before I realized there was a bug in ` _formatDuration`, and I kicked myself for not jumping on unit testing sooner. It was also at this point that I realized I'll probably have to repeat some logic to sort by duration time, and perhaps some of the challenge in this exercise lay in thinking and reading ahead.
+This was working for all custom fields although I was hitting an issue with sorting by Due Date. I probably burnt another 30-40 minutes debugging my query before I realized there was a bug in ` _formatDuration`, and I kicked myself for not jumping on unit testing sooner.
+
+With the bug fixed and a failsafe built in `_formatDuration` ended up looking like this
+
+```ts
+  private _formatDuration(_durationMs: number, _isInProgress: boolean): string {
+    try {
+      // for readability rather than neccesity
+      const msInSecond = 1000;
+      const msInMinute = msInSecond * 60;
+      const msInHour = msInMinute * 60;
+      const msInDay = 24 * msInHour;
+      const d = Math.floor(_durationMs / msInDay);
+      let remainder = _durationMs % msInDay;
+      const h = Math.floor(remainder / msInHour);
+      remainder %= msInHour;
+      const m = Math.floor(remainder / msInMinute);
+      remainder %= msInMinute;
+      const s = Math.floor(remainder / msInSecond);
+      // probably no need to be accurate to ms
+
+      const [largest, next] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
+
+      let subString;
+
+      const [largestUnit, luAmount] = largest;
+      const [nextUnit, nuAmount] = next ?? ['', ''];
+
+      if (largestUnit === 'd' && luAmount > 5) {
+        subString = '5d+';
+      } else {
+        subString = (luAmount + largestUnit + ' ' + nuAmount + nextUnit).trim();
+      }
+      return `${_isInProgress ? 'In Progress: ' : ''}${subString}`;
+    } catch (e) {
+      logger.error(e);
+      return 'N/A';
+    }
+  }
+
+  private _formatSLAText(_durationMs: number) {
+    return !_durationMs ? 'In Progress' : _durationMs <= this._slaThresholdMs ? 'Met' : 'Breached';
+  }
+```
+
+We would need to determine an amount to display how many days in duration a ticket was. 5 Seems reasonable to me with an SLA of 8 hours but some of the seeded data had durations over 700 days - possibly a signal that my assumption about first transition might be off.
+
+It was also at this point that I realized I'll probably have to repeat some logic to sort by duration time, and perhaps some of the challenge in this exercise lay in thinking and reading ahead.
+
+Sort by duration or SLA status really meant just adding a couple more options to `buildSortSql` and reusing the query I had created from part one. So I ended up with this
+
+```ts
+  // TODO: store types
+  private buildSortSql(
+    fieldType:
+      | 'text'
+      | 'number'
+      | 'boolean'
+      | 'date'
+      | 'currency'
+      | 'user'
+      | 'select'
+      | 'status'
+      | 'duration'
+      | 'sla',
+  ): { orderByExpr: string; joinSql: string } {
+    switch (fieldType) {
+      case 'text':
+        return {
+          orderByExpr: `ttfv.text_value`,
+          joinSql: '',
+        };
+
+      case 'number':
+        return {
+          orderByExpr: `ttfv.number_value`,
+          joinSql: '',
+        };
+
+      case 'date':
+        return {
+          orderByExpr: `ttfv.date_value`,
+          joinSql: '',
+        };
+
+      case 'boolean':
+        return {
+          orderByExpr: `ttfv.boolean_value`,
+          joinSql: '',
+        };
+
+      case 'currency':
+        return {
+          orderByExpr: `(ttfv.currency_value->>'amount')::numeric`,
+          joinSql: '',
+        };
+
+      case 'user':
+        return {
+          orderByExpr: `u_sort.last_name`,
+          joinSql: `
+          LEFT JOIN users u_sort
+            ON u_sort.id = ttfv.user_value
+        `,
+        };
+
+      case 'select':
+        return {
+          orderByExpr: `
+          CASE so.label
+            WHEN 'Low' THEN 1
+            WHEN 'Medium' THEN 2
+            WHEN 'High' THEN 3
+            WHEN 'Critical' THEN 4
+            ELSE 5
+          END
+        `,
+          joinSql: `
+          LEFT JOIN ticketing_field_options so
+            ON so.id = ttfv.select_reference_value_uuid
+        `,
+        };
+
+      case 'status':
+        return {
+          orderByExpr: `sg.name`,
+          joinSql: `
+          LEFT JOIN ticketing_field_status_options s
+            ON s.id = ttfv.status_reference_value_uuid
+          LEFT JOIN ticketing_field_status_groups sg
+            ON sg.id = s.group_id
+        `,
+        };
+      case 'duration':
+        return {
+          orderByExpr: 'COALESCE(ct.cycle_time_to_done, ct.cycle_time_to_now)',
+          joinSql: this.buildCycleTimeJoin(),
+        };
+      case 'sla':
+        return {
+          orderByExpr: `
+            CASE
+              WHEN ct.cycle_time_to_done IS NULL THEN 0
+              WHEN ct.cycle_time_to_done <= ${this._slaThresholdMs} THEN 1
+              ELSE 2
+            END
+          `,
+          joinSql: this.buildCycleTimeJoin(),
+        };
+
+      default:
+        throw new Error(`Unsupported sort field type: ${fieldType}`);
+    }
+  }
+  private buildCycleTimeJoin(): string {
+    return `
+    LEFT JOIN (
+      WITH
+        done_group AS (
+          SELECT id FROM ticketing_field_status_groups WHERE sequence = 3
+        ),
+        done_statuses AS (
+          SELECT id FROM ticketing_field_status_options
+          WHERE group_id IN (SELECT id FROM done_group)
+        ),
+        first_transition AS (
+          SELECT
+            ticket_id,
+            MIN(transitioned_at) AS first_transition_at
+          FROM ticketing_cycle_time_histories
+          GROUP BY ticket_id
+        ),
+        first_done AS (
+          SELECT
+            ticket_id,
+            MIN(transitioned_at) AS first_done_at
+          FROM ticketing_cycle_time_histories
+          WHERE to_status_id IN (SELECT id FROM done_statuses)
+          GROUP BY ticket_id
+        )
+      SELECT
+        ft.ticket_id,
+        ft.first_transition_at,
+        fd.first_done_at,
+        ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+        ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+      FROM first_transition ft
+      LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+    ) ct ON ct.ticket_id = tt.id
+  `;
+  }
+```
+
+I'm reasonably pleased with this and it's fast enough with the data set we have. I still think denormalization of the `cycle_time_to_done` and `cycle_time_to_now` fields is the simplest step improving performance. The other option is a materialized view which updates on inserts to `ticketing_cycle_time_histories`
+
+## Part Three

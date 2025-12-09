@@ -270,4 +270,4 @@ I can start with a search query using ILIKE because it's reasonably trivial. I t
             OR u.last_name ILIKE '%' || $1 || '%'
 ```
 
-These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution
+These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution. I also discovered it broke the sorting capabilities.

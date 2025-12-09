@@ -248,3 +248,26 @@ Sort by duration or SLA status really meant just adding a couple more options to
 I'm reasonably pleased with this and it's fast enough with the data set we have. I still think denormalization of the `cycle_time_to_done` and `cycle_time_to_now` fields is the simplest step improving performance. The other option is a materialized view which updates on inserts to `ticketing_cycle_time_histories`
 
 ## Part Three
+
+Again some ambiguous instruction here - the comments in matter repo specifically say "use ILIKE" but the ASSESMENT.md says to use pg_trm.
+I can start with a search query using ILIKE because it's reasonably trivial. I tested that this would work at all by first completing the front end then using
+
+```sql
+ SELECT DISTINCT ttfv.ticket_id
+            FROM ticketing_ticket_field_value ttfv
+            LEFT JOIN ticketing_field_options so
+              ON so.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_options s
+              ON s.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_groups sg
+              ON sg.id = s.group_id
+            LEFT JOIN users u
+              ON u.id = ttfv.user_value
+            WHERE
+              ttfv.text_value ILIKE '%' || $1 || '%'
+            OR so.label ILIKE '%' || $1 || '%'
+            OR sg.name  ILIKE '%' || $1 || '%'
+            OR u.last_name ILIKE '%' || $1 || '%'
+```
+
+These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution

@@ -600,30 +600,92 @@ export class MatterRepo {
   }
 
   private async getSearchIds(client: PoolClient, params: MatterListParams) {
-    if (params?.search?.trim()) {
-      const searchResult = await client.query(
-        `
-            SELECT DISTINCT ttfv.ticket_id
-            FROM ticketing_ticket_field_value ttfv 
-            LEFT JOIN ticketing_field_options so 
-              ON so.id = ttfv.select_reference_value_uuid
-            LEFT JOIN ticketing_field_status_options s 
-              ON s.id = ttfv.select_reference_value_uuid
-            LEFT JOIN ticketing_field_status_groups sg
-              ON sg.id = s.group_id
-            LEFT JOIN users u 
-              ON u.id = ttfv.user_value
-            WHERE 
-              ttfv.text_value ILIKE '%' || $1 || '%'
-            OR so.label ILIKE '%' || $1 || '%'
-            OR sg.name  ILIKE '%' || $1 || '%'
-            OR u.last_name ILIKE '%' || $1 || '%' 
-          `,
-        [params.search],
-      );
-      return searchResult.rows.map((r) => r.ticket_id);
-    }
-    return [] as string[];
+    if (!params?.search?.trim()) return [] as string[];
+    const search = params.search.trim();
+    const thresholdMs = this._slaThresholdMs;
+
+    const searchResult = await client.query(
+      `
+    WITH 
+      done_group AS (
+        SELECT id
+        FROM ticketing_field_status_groups
+        WHERE sequence = 3
+      ),
+      done_statuses AS (
+        SELECT id
+        FROM ticketing_field_status_options
+        WHERE group_id IN (SELECT id FROM done_group)
+      ),
+      first_transition AS (
+        SELECT 
+          ticket_id,
+          MIN(transitioned_at) AS first_transition_at
+        FROM ticketing_cycle_time_histories
+        GROUP BY ticket_id
+      ),
+      first_done AS (
+        SELECT 
+          ticket_id,
+          MIN(transitioned_at) AS first_done_at
+        FROM ticketing_cycle_time_histories
+        WHERE to_status_id IN (SELECT id FROM done_statuses)
+        GROUP BY ticket_id
+      ),
+      ticket_cycle_times AS (
+        SELECT
+          ft.ticket_id,
+          ft.first_transition_at,
+          fd.first_done_at,
+          ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+          ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+        FROM first_transition ft
+        LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+      )
+
+    SELECT DISTINCT ticket_id FROM (
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.text_value % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.number_value::text ILIKE '%' || $1 || '%'
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_options so ON so.id = ttfv.select_reference_value_uuid
+      WHERE so.label % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_status_options s ON s.id = ttfv.select_reference_value_uuid
+      LEFT JOIN ticketing_field_status_groups sg ON sg.id = s.group_id
+      WHERE s.label % $1::text OR sg.name % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN users u ON u.id = ttfv.user_value
+      WHERE (u.first_name || ' ' || u.last_name) % $1::text
+
+      UNION ALL
+      -- Cycle time / SLA
+      SELECT tct.ticket_id
+      FROM ticket_cycle_times tct
+      WHERE ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)
+         OR ($1 ILIKE 'Met' AND tct.cycle_time_to_done <= $2)
+         OR ($1 ILIKE 'Breached' AND tct.cycle_time_to_done > $2)
+         OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
+    ) AS combined
+    `,
+      [search, thresholdMs],
+    );
+
+    return searchResult.rows.map((r) => r.ticket_id);
   }
 }
 

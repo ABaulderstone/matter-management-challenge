@@ -165,3 +165,13 @@ CREATE INDEX idx_ticket_field_value_number ON ticketing_ticket_field_value(numbe
 CREATE INDEX idx_ticket_field_value_date ON ticketing_ticket_field_value(date_value);
 CREATE INDEX idx_ticketing_ticket_created_at ON ticketing_ticket(created_at);
 
+
+-- indexes for fuzzy search
+
+
+CREATE INDEX idx_ticket_field_status_label_trgm
+  ON ticketing_field_status_options USING gin (label gin_trgm_ops);
+
+
+CREATE INDEX idx_users_name_trgm
+  ON users USING gin ((first_name || ' ' || last_name) gin_trgm_ops);

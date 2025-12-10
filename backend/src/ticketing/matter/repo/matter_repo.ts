@@ -45,17 +45,27 @@ export class MatterRepo {
     const client = await pool.connect();
 
     try {
-      const queryParams: (string | number | string[])[] = [];
-
+      let paramIndex = 1;
+      const queryParams = [];
       // Determine sort column
       let orderByClause = '';
       let fieldJoinQuery = '';
       let searchCondition = '';
       const searchIds = await this.getSearchIds(client, params);
       if (searchIds.length > 0) {
-        searchCondition = `AND tt.id = ANY($${queryParams.length + 1})`;
+        searchCondition = `AND tt.id = ANY($${paramIndex})`;
         queryParams.push(searchIds);
+        paramIndex++;
       }
+
+      const countQuery = `
+        SELECT COUNT(DISTINCT tt.id) as total
+        FROM ticketing_ticket tt
+        WHERE 1=1 ${searchCondition}
+      `;
+
+      const countResult = await client.query(countQuery, queryParams);
+      const total = parseInt(countResult.rows[0].total);
 
       switch (sortBy) {
         case 'created_at':
@@ -88,15 +98,16 @@ export class MatterRepo {
 
           // pedantic snake to camel case
           const { field_id: fieldId, field_type: fieldType } = fieldQueryResult.rows[0];
-          console.log(fieldId, fieldType);
 
           // to stop n + 1 issue
+
           fieldJoinQuery = `
-        LEFT JOIN ticketing_ticket_field_value ttfv 
-        ON ttfv.ticket_id = tt.id
-        AND ttfv.ticket_field_id = $${queryParams.length + 1}
-        `;
+          LEFT JOIN ticketing_ticket_field_value ttfv 
+          ON ttfv.ticket_id = tt.id
+          AND ttfv.ticket_field_id = $${paramIndex}
+          `;
           queryParams.push(fieldId);
+          paramIndex++;
 
           // each field type needs a different kind of order by
           const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
@@ -104,18 +115,9 @@ export class MatterRepo {
           orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
       }
 
-      // Get total count
-      const countQuery = `
-        SELECT COUNT(DISTINCT tt.id) as total
-        FROM ticketing_ticket tt
-        WHERE 1=1 ${searchCondition}
-      `;
-
-      // TODO - add params back when search happens
-      const countResult = await client.query(countQuery, queryParams);
-      const total = parseInt(countResult.rows[0].total);
-
       // Get matters
+      const limitPlaceholderIndex = paramIndex++;
+      const offsetPlaceholderIndex = paramIndex++;
       const mattersQuery = `
         SELECT
           tt.id,
@@ -126,10 +128,9 @@ export class MatterRepo {
         ${fieldJoinQuery}
         WHERE 1=1 ${searchCondition}
         ORDER BY ${orderByClause}
-        LIMIT $${queryParams.length + 1}
-        OFFSET $${queryParams.length + 2}
+        LIMIT $${limitPlaceholderIndex}
+        OFFSET $${offsetPlaceholderIndex}
       `;
-
       queryParams.push(limit, offset);
       const mattersResult = await client.query(mattersQuery, queryParams);
 

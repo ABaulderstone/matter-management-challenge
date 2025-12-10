@@ -8,7 +8,6 @@ import {
   CurrencyValue,
   UserValue,
 } from '../../types.js';
-import logger from '../../../utils/logger.js';
 
 export class MatterService {
   private matterRepo: MatterRepo;

@@ -51,7 +51,14 @@ export class MatterRepo {
       let orderByClause = '';
       let fieldJoinQuery = '';
       let searchCondition = '';
-      const searchIds = await this.getSearchIds(client, params);
+
+      const searchTerm = params.search?.trim() ?? '';
+      const searchIds = await this.getSearchIds(client, searchTerm);
+
+      if (searchTerm && searchIds.length === 0) {
+        // bail out early if no searchIds
+        return { matters: [], total: 0 };
+      }
       if (searchIds.length > 0) {
         searchCondition = `AND tt.id = ANY($${paramIndex})`;
         queryParams.push(searchIds);
@@ -599,9 +606,9 @@ export class MatterRepo {
   `;
   }
 
-  private async getSearchIds(client: PoolClient, params: MatterListParams) {
-    if (!params?.search?.trim()) return [] as string[];
-    const search = params.search.trim();
+  private async getSearchIds(client: PoolClient, searchTerm: string) {
+    if (!searchTerm) return [] as string[];
+
     const thresholdMs = this._slaThresholdMs;
 
     const searchResult = await client.query(
@@ -681,7 +688,7 @@ export class MatterRepo {
          OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
     ) AS combined
     `,
-      [search, thresholdMs],
+      [searchTerm, thresholdMs],
     );
 
     return searchResult.rows.map((r) => r.ticket_id);

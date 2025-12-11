@@ -356,8 +356,12 @@ After quite a bit of research on trigrams and a thorough examination of the [pg_
 
 ```
 
-Again - there's some repeated logic here, and now that I've got comfortable working with `schema.sql` (to add some more indexes) if time permits I'll probably refactor to a Materialized View with some database triggers.
+Again - there's some repeated logic here, and some room for improvements - I could rank results with `similarity ( text, text ) → real`, for example. Now that I've got comfortable working with `schema.sql` (to add some more indexes) if time permits I'll probably refactor to a Materialized View with some database triggers.
 
 This is thorough enough for my first pass and I want to spend some time writing solid tests.
 
 ## Part Four
+
+I had already done some unit tests on `cycle_time_service.ts` and I'm pretty pleased with them but I did note that mocking the `MatterRepo` was clunky. If I was to take ownership over this project I'd be pushing some kind of dependency injection system as a priority. 
+
+

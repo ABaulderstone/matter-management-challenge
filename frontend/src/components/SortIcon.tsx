@@ -5,7 +5,6 @@ export interface SortIconProps {
 }
 
 export default function SortIcon({ column, sortBy, sortOrder }: SortIconProps) {
-  console.log({ column, sortBy });
   if (sortBy !== column) {
     return (
       <svg

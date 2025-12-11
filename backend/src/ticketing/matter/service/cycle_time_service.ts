@@ -45,7 +45,6 @@ export class CycleTimeService {
   ): Promise<{ cycleTime: CycleTime; sla: SLAStatus }> {
     // I feel this should be typed
     const data = await this.matterRepo.getTicketQueryTime(_ticketId);
-    console.log(data);
     const resolutionTime = +data.cycle_time_to_done;
     return {
       cycleTime: {

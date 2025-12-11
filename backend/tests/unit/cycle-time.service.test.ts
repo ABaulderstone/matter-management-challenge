@@ -23,6 +23,7 @@ describe('CycleTimeService', () => {
       mockRepo = {
         getTicketQueryTime: vi.fn(),
       };
+      // This is a bit gross - but it allows the new MatterRepo() in cycle time service to return our mock
       (MatterRepo as unknown as Mock).mockReturnValue(mockRepo);
       service = new CycleTimeService();
     });

@@ -673,7 +673,6 @@ export class MatterRepo {
       WHERE (u.first_name || ' ' || u.last_name) % $1::text
 
       UNION ALL
-      -- Cycle time / SLA
       SELECT tct.ticket_id
       FROM ticket_cycle_times tct
       WHERE ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)

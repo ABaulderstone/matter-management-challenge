@@ -270,4 +270,94 @@ I can start with a search query using ILIKE because it's reasonably trivial. I t
             OR u.last_name ILIKE '%' || $1 || '%'
 ```
 
-These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution. I also discovered it broke the sorting capabilities.
+As a query to get ticket Ids and then pass them into the sort query
+
+These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution. I also discovered it broke the sorting capabilities - in particular there was an issue with the query parameters and how they were being passed into the count query. I resolved this by moving count to before sort.
+
+At this point I'm running low on time - added a few unit tests for the CycletimeService mostly to show that I could but I'm going to try and knock out a better search implementation before doing any more.
+
+After quite a bit of research on trigrams and a thorough examination of the [pg_tgrm docs](https://www.postgresql.org/docs/current/pgtrgm.html) I wrapped my head around the problem. I got some hints on indexes and optimisation from chatGPT and landed on a much more thorough SQL query
+
+```sql
+  WITH
+      done_group AS (
+        SELECT id
+        FROM ticketing_field_status_groups
+        WHERE sequence = 3
+      ),
+      done_statuses AS (
+        SELECT id
+        FROM ticketing_field_status_options
+        WHERE group_id IN (SELECT id FROM done_group)
+      ),
+      first_transition AS (
+        SELECT
+          ticket_id,
+          MIN(transitioned_at) AS first_transition_at
+        FROM ticketing_cycle_time_histories
+        GROUP BY ticket_id
+      ),
+      first_done AS (
+        SELECT
+          ticket_id,
+          MIN(transitioned_at) AS first_done_at
+        FROM ticketing_cycle_time_histories
+        WHERE to_status_id IN (SELECT id FROM done_statuses)
+        GROUP BY ticket_id
+      ),
+      ticket_cycle_times AS (
+        SELECT
+          ft.ticket_id,
+          ft.first_transition_at,
+          fd.first_done_at,
+          ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+          ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+        FROM first_transition ft
+        LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+      )
+
+    SELECT DISTINCT ticket_id FROM (
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.text_value % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.number_value::text ILIKE '%' || $1 || '%'
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_options so ON so.id = ttfv.select_reference_value_uuid
+      WHERE so.label % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_status_options s ON s.id = ttfv.select_reference_value_uuid
+      LEFT JOIN ticketing_field_status_groups sg ON sg.id = s.group_id
+      WHERE s.label % $1::text OR sg.name % $1::text
+
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN users u ON u.id = ttfv.user_value
+      WHERE (u.first_name || ' ' || u.last_name) % $1::text
+
+      UNION ALL
+      SELECT tct.ticket_id
+      FROM ticket_cycle_times tct
+      WHERE ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)
+         OR ($1 ILIKE 'Met' AND tct.cycle_time_to_done <= $2)
+         OR ($1 ILIKE 'Breached' AND tct.cycle_time_to_done > $2)
+         OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
+    ) AS combined
+
+```
+
+Again - there's some repeated logic here, and now that I've got comfortable working with `schema.sql` (to add some more indexes) if time permits I'll probably refactor to a Materialized View with some database triggers.
+
+This is thorough enough for my first pass and I want to spend some time writing solid tests.
+
+## Part Four

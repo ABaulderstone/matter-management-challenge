@@ -55,11 +55,12 @@ export class MatterRepo {
       const searchTerm = params.search?.trim() ?? '';
       const searchIds = await this.getSearchIds(client, searchTerm);
 
-      if (searchTerm && searchIds.length === 0) {
+      if (searchIds === null) {
+        logger.info('Empty search term - continue to show all matters');
+      } else if (searchIds.length === 0) {
         // bail out early if no searchIds
         return { matters: [], total: 0 };
-      }
-      if (searchIds.length > 0) {
+      } else {
         searchCondition = `AND tt.id = ANY($${paramIndex})`;
         queryParams.push(searchIds);
         paramIndex++;
@@ -606,8 +607,8 @@ export class MatterRepo {
   `;
   }
 
-  private async getSearchIds(client: PoolClient, searchTerm: string) {
-    if (!searchTerm) return [] as string[];
+  private async getSearchIds(client: PoolClient, searchTerm: string): Promise<null | string[]> {
+    if (!searchTerm || searchTerm.length <= 2) return null;
 
     const thresholdMs = this._slaThresholdMs;
 
@@ -615,26 +616,18 @@ export class MatterRepo {
       `
     WITH 
       done_group AS (
-        SELECT id
-        FROM ticketing_field_status_groups
-        WHERE sequence = 3
+        SELECT id FROM ticketing_field_status_groups WHERE sequence = 3
       ),
       done_statuses AS (
-        SELECT id
-        FROM ticketing_field_status_options
-        WHERE group_id IN (SELECT id FROM done_group)
+        SELECT id FROM ticketing_field_status_options WHERE group_id IN (SELECT id FROM done_group)
       ),
       first_transition AS (
-        SELECT 
-          ticket_id,
-          MIN(transitioned_at) AS first_transition_at
+        SELECT ticket_id, MIN(transitioned_at) AS first_transition_at
         FROM ticketing_cycle_time_histories
         GROUP BY ticket_id
       ),
       first_done AS (
-        SELECT 
-          ticket_id,
-          MIN(transitioned_at) AS first_done_at
+        SELECT ticket_id, MIN(transitioned_at) AS first_done_at
         FROM ticketing_cycle_time_histories
         WHERE to_status_id IN (SELECT id FROM done_statuses)
         GROUP BY ticket_id
@@ -653,7 +646,9 @@ export class MatterRepo {
     SELECT DISTINCT ticket_id FROM (
       SELECT ttfv.ticket_id
       FROM ticketing_ticket_field_value ttfv
-      WHERE ttfv.text_value % $1::text
+      WHERE
+        (length($1) >= 3 AND ttfv.text_value ILIKE '%' || $1 || '%')
+        OR (length($1) >= 4 AND ttfv.text_value % $1)
 
       UNION ALL
       SELECT ttfv.ticket_id
@@ -664,28 +659,36 @@ export class MatterRepo {
       SELECT ttfv.ticket_id
       FROM ticketing_ticket_field_value ttfv
       LEFT JOIN ticketing_field_options so ON so.id = ttfv.select_reference_value_uuid
-      WHERE so.label % $1::text
+      WHERE
+        (length($1) >= 3 AND so.label ILIKE '%' || $1 || '%')
+        OR (length($1) >= 4 AND so.label % $1)
 
       UNION ALL
       SELECT ttfv.ticket_id
       FROM ticketing_ticket_field_value ttfv
       LEFT JOIN ticketing_field_status_options s ON s.id = ttfv.select_reference_value_uuid
       LEFT JOIN ticketing_field_status_groups sg ON sg.id = s.group_id
-      WHERE s.label % $1::text OR sg.name % $1::text
+      WHERE
+        (length($1) >= 3 AND (s.label ILIKE '%' || $1 || '%' OR sg.name ILIKE '%' || $1 || '%'))
+        OR (length($1) >= 4 AND (s.label % $1 OR sg.name % $1))
 
       UNION ALL
       SELECT ttfv.ticket_id
       FROM ticketing_ticket_field_value ttfv
       LEFT JOIN users u ON u.id = ttfv.user_value
-      WHERE (u.first_name || ' ' || u.last_name) % $1::text
+      WHERE
+        (length($1) >= 3 AND (u.first_name || ' ' || u.last_name) ILIKE '%' || $1 || '%')
+        OR (length($1) >= 4 AND (u.first_name || ' ' || u.last_name) % $1)
 
       UNION ALL
       SELECT tct.ticket_id
       FROM ticket_cycle_times tct
-      WHERE ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)
-         OR ($1 ILIKE 'Met' AND tct.cycle_time_to_done <= $2)
-         OR ($1 ILIKE 'Breached' AND tct.cycle_time_to_done > $2)
-         OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
+      WHERE 
+        ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)
+        OR ($1 ILIKE 'Met' AND tct.cycle_time_to_done <= $2)
+        OR ($1 ILIKE 'Breached' AND tct.cycle_time_to_done > $2)
+        OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
+
     ) AS combined
     `,
       [searchTerm, thresholdMs],

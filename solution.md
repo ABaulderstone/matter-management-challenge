@@ -362,6 +362,21 @@ This is thorough enough for my first pass and I want to spend some time writing 
 
 ## Part Four
 
-I had already done some unit tests on `cycle_time_service.ts` and I'm pretty pleased with them but I did note that mocking the `MatterRepo` was clunky. If I was to take ownership over this project I'd be pushing some kind of dependency injection system as a priority. 
+I had already done some unit tests on `cycle_time_service.ts` and I'm pretty pleased with them but I did note that mocking the `MatterRepo` was clunky. If I was to take ownership over this project I'd be pushing some kind of dependency injection system as a priority.
 
+Tests for `matter_service.ts` didn't really do much except confirm the repo was being called correctly.
 
+However when I started testing `matter_repo.ts` I uncovered some frustrating search behavior.
+
+- When there was no results for a search all records were returned
+- Fuzzy search did not work on exact substrings on very long strings
+
+This resulted a quick refactor to the matter repo in yet another refactor to my search query; combining fuzzy search for long search strings with simple substring search for shorter substrings. I used chatgpt here to get the syntax right. A snippet for clarity - and the field where it was most useful:
+
+```sql
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE
+        (length($1) >= 3 AND ttfv.text_value ILIKE '%' || $1 || '%')
+        OR (length($1) >= 4 AND ttfv.text_value % $1)
+```

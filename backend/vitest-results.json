@@ -1,0 +1,259 @@
+{
+  "numTotalTestSuites": 17,
+  "numPassedTestSuites": 17,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 26,
+  "numPassedTests": 26,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "startTime": 1765545072381,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["", "GET /api/v1/matters"],
+          "fullName": " GET /api/v1/matters returns a valid matters response",
+          "status": "passed",
+          "title": "returns a valid matters response",
+          "duration": 91,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1765545073018,
+      "endTime": 1765545073109,
+      "status": "passed",
+      "message": "",
+      "name": "/app/tests/api/matters.get.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["", "CycleTimeService", "calculateCycleTimeAndSLA"],
+          "fullName": " CycleTimeService calculateCycleTimeAndSLA Calculates Cycle Time and SLA for a completed ticket - on time",
+          "status": "passed",
+          "title": "Calculates Cycle Time and SLA for a completed ticket - on time",
+          "duration": 2,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "calculateCycleTimeAndSLA"],
+          "fullName": " CycleTimeService calculateCycleTimeAndSLA Calculates Cycle Time and SLA for completed ticket - breached",
+          "status": "passed",
+          "title": "Calculates Cycle Time and SLA for completed ticket - breached",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "calculateCycleTimeAndSLA"],
+          "fullName": " CycleTimeService calculateCycleTimeAndSLA Calculates Cycle Time and SLA for completed ticket - In Progress",
+          "status": "passed",
+          "title": "Calculates Cycle Time and SLA for completed ticket - In Progress",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "calculateCycleTimeAndSLA"],
+          "fullName": " CycleTimeService calculateCycleTimeAndSLA Calculates Cycle Time and SLA for completed ticket - In Progress/Overdue",
+          "status": "passed",
+          "title": "Calculates Cycle Time and SLA for completed ticket - In Progress/Overdue",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats durations correctly for completed tickets",
+          "status": "passed",
+          "title": "formats durations correctly for completed tickets",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats durations correctly for in-progress tickets",
+          "status": "passed",
+          "title": "formats durations correctly for in-progress tickets",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats durations >5 days as 5d+",
+          "status": "passed",
+          "title": "formats durations >5 days as 5d+",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration handles 1 day 3 hours 5 minutes",
+          "status": "passed",
+          "title": "handles 1 day 3 hours 5 minutes",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats 10 minutes 59 seconds",
+          "status": "passed",
+          "title": "formats 10 minutes 59 seconds",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats 23 hours 42 minutes",
+          "status": "passed",
+          "title": "formats 23 hours 42 minutes",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration formats 23 hours 10 seconds",
+          "status": "passed",
+          "title": "formats 23 hours 10 seconds",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatDuration"],
+          "fullName": " CycleTimeService _formatDuration in-progress format for 23 hours 10 seconds",
+          "status": "passed",
+          "title": "in-progress format for 23 hours 10 seconds",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatSLAText"],
+          "fullName": " CycleTimeService _formatSLAText returns \"In Progress\" if duration is 0",
+          "status": "passed",
+          "title": "returns \"In Progress\" if duration is 0",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatSLAText"],
+          "fullName": " CycleTimeService _formatSLAText returns \"Met\" if duration <= SLA threshold",
+          "status": "passed",
+          "title": "returns \"Met\" if duration <= SLA threshold",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "CycleTimeService", "_formatSLAText"],
+          "fullName": " CycleTimeService _formatSLAText returns \"Breached\" if duration > SLA threshold",
+          "status": "passed",
+          "title": "returns \"Breached\" if duration > SLA threshold",
+          "duration": 0,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1765545072922,
+      "endTime": 1765545072925,
+      "status": "passed",
+      "message": "",
+      "name": "/app/tests/unit/cycle-time.service.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["", "MatterRepo", "getMatters"],
+          "fullName": " MatterRepo getMatters returns empty result when there are no searchIds",
+          "status": "passed",
+          "title": "returns empty result when there are no searchIds",
+          "duration": 4,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterRepo", "getMatters"],
+          "fullName": " MatterRepo getMatters returns paginated matters and total",
+          "status": "passed",
+          "title": "returns paginated matters and total",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterRepo", "getMatterById"],
+          "fullName": " MatterRepo getMatterById returns null when not found",
+          "status": "passed",
+          "title": "returns null when not found",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterRepo", "getMatterById"],
+          "fullName": " MatterRepo getMatterById returns matter with fields",
+          "status": "passed",
+          "title": "returns matter with fields",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterRepo", "getTicketQueryTime"],
+          "fullName": " MatterRepo getTicketQueryTime returns null if no results",
+          "status": "passed",
+          "title": "returns null if no results",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterRepo", "getTicketQueryTime"],
+          "fullName": " MatterRepo getTicketQueryTime returns row from cycle time query",
+          "status": "passed",
+          "title": "returns row from cycle time query",
+          "duration": 0,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1765545072925,
+      "endTime": 1765545072931,
+      "status": "passed",
+      "message": "",
+      "name": "/app/tests/unit/matter.repo.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["", "MatterService", "getMatters"],
+          "fullName": " MatterService getMatters Should return paginated list of enriched matters",
+          "status": "passed",
+          "title": "Should return paginated list of enriched matters",
+          "duration": 4,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterService", "getMatterById"],
+          "fullName": " MatterService getMatterById enriches matter with cycle time and SLA",
+          "status": "passed",
+          "title": "enriches matter with cycle time and SLA",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterService", "getMatterById"],
+          "fullName": " MatterService getMatterById returns null when matter not found",
+          "status": "passed",
+          "title": "returns null when matter not found",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": ["", "MatterService", "updateMatter"],
+          "fullName": " MatterService updateMatter delegates arguments correctly to the repo",
+          "status": "passed",
+          "title": "delegates arguments correctly to the repo",
+          "duration": 0,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1765545072866,
+      "endTime": 1765545072871,
+      "status": "passed",
+      "message": "",
+      "name": "/app/tests/unit/matter.service.test.ts"
+    }
+  ]
+}

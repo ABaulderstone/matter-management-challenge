@@ -427,6 +427,7 @@ async function seed() {
     // Jane Smith - Merger - Medium
     for (let i = 4; i < 8; i++) {
       // Create ticket
+      console.log("Seeding Jane's matters");
       const ticketResult = await client.query(
         `INSERT INTO ticketing_ticket (board_id) VALUES ($1) RETURNING id`,
         [boardId]
@@ -560,6 +561,7 @@ async function seed() {
     // Mike Johnson - High
     for (let i = 8; i < 12; i++) {
       // Create ticket
+      console.log("Seeding Mike's Matters");
       const ticketResult = await client.query(
         `INSERT INTO ticketing_ticket (board_id) VALUES ($1) RETURNING id`,
         [boardId]
@@ -687,6 +689,7 @@ async function seed() {
     // Sarah Williams - critical
     for (let i = 12; i < 16; i++) {
       // Create ticket
+      console.log("Seeding Sarah's matters");
       const ticketResult = await client.query(
         `INSERT INTO ticketing_ticket (board_id) VALUES ($1) RETURNING id`,
         [boardId]

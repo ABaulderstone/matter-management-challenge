@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL test DB
+  postgres:
+    image: postgres:15-alpine
+    container_name: matter-management-db-test
+    environment:
+      POSTGRES_USER: matter
+      POSTGRES_PASSWORD: matter
+      POSTGRES_DB: matter_db_test
+    ports:
+      - '5433:5432' # map to different host port so dev DB isn't conflicted
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - matter-network-test
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U matter -d matter_db_test']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Seed DB
+  test-seed:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.test
+    container_name: matter-management-test-seed
+    environment:
+      DATABASE_URL: postgres://matter:matter@postgres:5432/matter_db_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - matter-network-test
+    restart: 'no'
+
+  # Backend for running tests
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    container_name: matter-management-backend-test
+    environment:
+      DATABASE_URL: postgres://matter:matter@postgres:5432/matter_db_test
+      NODE_ENV: test
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npm install && npx vitest run --coverage --reporter=verbose"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      test-seed:
+        condition: service_completed_successfully
+    networks:
+      - matter-network-test
+
+volumes:
+  postgres_data_test:
+    driver: local
+
+networks:
+  matter-network-test:
+    driver: bridge

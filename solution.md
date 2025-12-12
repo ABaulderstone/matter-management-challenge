@@ -380,3 +380,7 @@ This resulted a quick refactor to the matter repo in yet another refactor to my 
         (length($1) >= 3 AND ttfv.text_value ILIKE '%' || $1 || '%')
         OR (length($1) >= 4 AND ttfv.text_value % $1)
 ```
+
+This also had the benefit of preventing very short substring matches - leading to too many false positives.
+
+This

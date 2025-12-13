@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 
-vi.mock('../../src/ticketing/matter/repo/matter_repo', () => {
+vi.mock('../../repo/matter_repo', () => {
   return {
     MatterRepo: vi.fn().mockImplementation(() => ({
       getMatters: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('../../src/ticketing/matter/repo/matter_repo', () => {
   };
 });
 
-vi.mock('../../src/ticketing/matter/service/cycle_time_service', () => {
+vi.mock('../cycle_time_service', () => {
   return {
     CycleTimeService: vi.fn().mockImplementation(() => ({
       calculateCycleTimeAndSLA: vi.fn(),
@@ -18,9 +18,9 @@ vi.mock('../../src/ticketing/matter/service/cycle_time_service', () => {
   };
 });
 
-import { MatterRepo } from '../../src/ticketing/matter/repo/matter_repo';
-import { CycleTimeService } from '../../src/ticketing/matter/service/cycle_time_service';
-import { MatterService } from '../../src/ticketing/matter/service/matter_service';
+import { MatterRepo } from '../../repo/matter_repo';
+import { CycleTimeService } from '../cycle_time_service';
+import { MatterService } from '../matter_service';
 
 describe('MatterService', () => {
   let service: MatterService;

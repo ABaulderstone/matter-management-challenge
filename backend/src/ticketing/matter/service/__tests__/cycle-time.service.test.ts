@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { buildTicketTimes } from '../utils/cycle-time.utils';
+import { buildTicketTimes } from './utils/cycle-time.utils';
 
 //mocking the repo with self instantiation is possible but annoying - would look to refactor to the repo being passed in in constructor
-vi.mock('../../src/ticketing/matter/repo/matter_repo', () => {
+vi.mock('../../repo/matter_repo', () => {
   return {
     MatterRepo: vi.fn().mockImplementation(() => ({
       getTicketQueryTime: vi.fn(),
@@ -10,8 +10,8 @@ vi.mock('../../src/ticketing/matter/repo/matter_repo', () => {
   };
 });
 
-import { CycleTimeService } from '../../src/ticketing/matter/service/cycle_time_service';
-import { MatterRepo } from '../../src/ticketing/matter/repo/matter_repo';
+import { CycleTimeService } from '../cycle_time_service';
+import { MatterRepo } from '../../repo/matter_repo';
 
 describe('CycleTimeService', () => {
   describe('calculateCycleTimeAndSLA', () => {

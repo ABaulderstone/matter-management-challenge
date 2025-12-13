@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock pool + client
 const mockClient = {
   query: vi.fn(),
   release: vi.fn(),
 };
 
-vi.mock('../../src/db/pool', () => ({
+vi.mock('../../../../db/pool', () => ({
   default: { connect: vi.fn(() => mockClient) },
 }));
-import { MatterRepo } from '../../src/ticketing/matter/repo/matter_repo';
+import { MatterRepo } from '../matter_repo';
 
 describe('MatterRepo', () => {
   let repo: MatterRepo;
@@ -21,7 +20,7 @@ describe('MatterRepo', () => {
 
   describe('getMatters', () => {
     it('returns empty result when there are no searchIds', async () => {
-      // @ts-ignore mock private method
+      // @ts-ignore
       vi.spyOn(repo, 'getSearchIds').mockResolvedValue([]);
 
       const result = await repo.getMatters({ search: 'abc' });

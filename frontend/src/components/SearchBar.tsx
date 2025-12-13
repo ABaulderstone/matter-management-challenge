@@ -42,7 +42,7 @@ export default function SearchBar({
         ref={inputRef}
         onChange={handleChange}
         placeholder={placeholder}
-        className={`rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${className}`}
+        className={`rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
       />
       <button
         onClick={handleClear}

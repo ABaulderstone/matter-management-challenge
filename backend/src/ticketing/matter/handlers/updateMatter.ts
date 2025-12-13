@@ -19,7 +19,7 @@ export async function updateMatter(req: Request, res: Response): Promise<void> {
     }
 
     const body = updateSchema.parse(req.body);
-    
+
     // Default user ID (in production, this would come from authentication)
     const userId = 1;
 
@@ -28,11 +28,11 @@ export async function updateMatter(req: Request, res: Response): Promise<void> {
 
     // Return updated matter
     const updatedMatter = await matterService.getMatterById(id);
-    
+
     res.json(updatedMatter);
   } catch (error) {
     logger.error('Error updating matter', { error, matterId: req.params.id });
-    
+
     if (error instanceof z.ZodError) {
       res.status(400).json({
         error: 'Invalid request body',
@@ -44,4 +44,3 @@ export async function updateMatter(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
-

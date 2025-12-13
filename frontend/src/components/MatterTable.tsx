@@ -225,11 +225,9 @@ export function MatterTable({
                 {renderFieldValue(matter, 'Urgent')}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                {/* TODO: Display formatted resolution time (e.g., "2h 30m", "3d 5h") */}
                 <span>{matter.cycleTime?.resolutionTimeFormatted}</span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                {/* TODO: Display SLA badge (In Progress/Met/Breached) with appropriate colors */}
                 <Badge
                   customClasses={getSLABadgeColor(matter.sla ?? 'In Progress')}
                 >

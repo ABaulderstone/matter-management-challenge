@@ -33,4 +33,3 @@ export async function checkDatabaseConnection(): Promise<boolean> {
 }
 
 export default pool;
-

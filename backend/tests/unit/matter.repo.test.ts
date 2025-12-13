@@ -30,11 +30,9 @@ describe('MatterRepo', () => {
     });
 
     it('returns paginated matters and total', async () => {
-      // Fake search IDs to avoid early exit
       // @ts-ignore
       vi.spyOn(repo, 'getSearchIds').mockResolvedValue(['1', '2']);
 
-      // Fake count query
       mockClient.query
         .mockResolvedValueOnce({ rows: [{ total: '2' }] }) // count
         .mockResolvedValueOnce({
@@ -49,6 +47,7 @@ describe('MatterRepo', () => {
 
       const result = await repo.getMatters({ page: 1, limit: 25, search: 'abc' });
 
+      expect(mockClient.query).toBeCalledTimes(2);
       expect(result.total).toBe(2);
       expect(result.matters.length).toBe(2);
       expect(result.matters[0]).toEqual({

@@ -4,7 +4,7 @@
 
 This looks like a pretty tough problem - the db schema is a bit more complex than I am used to and am unfamiliar with EAV patterns. I think part one is within my capabilities but I'm less convinced about parts two and three.
 
-## Part One
+## SLA Time
 
 There's some ambiguity in what counts as the first transition. The DB schema document mentions `To Do → In Progress → Done` but also mentions `Previous status (NULL for first transition)`
 I figured I should work under the assumption that first transition means first entry in `ticketing_cycle_time_histories` (as soon as a ticket enters todo we are counting down to meet the SLA) - but obviously in a real work environment this would need to be clarified before even starting work.
@@ -22,7 +22,7 @@ The front end work was trivial - I wasn't sure how much of a refactor was expect
 
 I debated over adding tests at this stage but at 2-3 hours in I was hungry for a meatier problem and decided to move on. I wasn't too fussed with performance as noted earlier we were only enriching a slice of matters - and I only know about things like Materialized Views in the very abstract. Although I did note that perhaps denormalizing here is a good call. Something like adding `first_transition_at` and `first_done_at` fields to the matters themselves and either using DB triggers or just relying on the backend could save a lot of pain later on when dealing with both searches and joins for sorting.
 
-## Part Two
+## Sorting
 
 The biggest challenge here was wrapping my head around the EAV pattern. I probably spent a solid 40 minutes re-reading the Database Schema document, and digging around in psql to make sure I understood how it worked. Reaching for chatGPT again probably worked against me as I lead myself down a path of trying to piece together the custom fields in a big jsonb object within the SQL query itself and it got out of hand pretty quickly.
 
@@ -247,7 +247,7 @@ Sort by duration or SLA status really meant just adding a couple more options to
 
 I'm reasonably pleased with this and it's fast enough with the data set we have. I still think denormalization of the `cycle_time_to_done` and `cycle_time_to_now` fields is the simplest step improving performance. The other option is a materialized view which updates on inserts to `ticketing_cycle_time_histories`
 
-## Part Three
+## Search
 
 Again some ambiguous instruction here - the comments in matter repo specifically say "use ILIKE" but the ASSESMENT.md says to use pg_trm.
 I can start with a search query using ILIKE because it's reasonably trivial. I tested that this would work at all by first completing the front end then using
@@ -360,7 +360,9 @@ Again - there's some repeated logic here, and some room for improvements - I cou
 
 This is thorough enough for my first pass and I want to spend some time writing solid tests.
 
-## Part Four
+## Testing
+
+### Unit - Backend
 
 I had already done some unit tests on `cycle_time_service.ts` and I'm pretty pleased with them but I did note that mocking the `MatterRepo` was clunky. If I was to take ownership over this project I'd be pushing some kind of dependency injection system as a priority.
 
@@ -383,4 +385,17 @@ This resulted a quick refactor to the matter repo in yet another refactor to my 
 
 This also had the benefit of preventing very short substring matches - leading to too many false positives.
 
-This
+`matter_repo.ts` tests essentially came down to the order and number of times client.query() was called
+
+### E2E Backend
+
+As vitest had already been set up I decided to use supertest for testing the API layer, although I would typically use something like playwright here. I created `docker-compose.test.yml` which runs a `test-seed` script here for deterministically seeding a smaller data set, there are some refactors to help with the `ticketing_cycle_time_histories` stuff - there's probably room to abstract the loops a bit further but seeding 16 records was enough to test sorting and searching in a real system.
+Most of the tests are around the API responses matching a schema - zod was already included so I just went a bit further with this - and checking the results on search worked, that the order of sort works.
+
+## Optimisation thoughts
+
+A few things come to mind:
+
+- one is setting up materialized views with db triggers on `ticketing_cycle_time_histories` - this will cut down joins on the queries significantly
+- Because my implementation of search involves getting an array of ticket_ids back I could cache common search terms, and avoid that query altogether
+- A database per tenant approach could cut down complexity in the EAV tables, at cost of a longer client onboarding process

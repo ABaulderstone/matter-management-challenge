@@ -1,552 +1,410 @@
-# Matter Management System - Take-Home Assessment
+# Documenting my solution
 
-Welcome! We're excited to see your approach to building a production-ready system.
+## Running Tests
 
-## What You'll Be Building
+- `docker compose -f docker-compose.test.yml up` will build and run backend unit tests and api tests running against a real pg database
+- `npm install && npm run test` will run the frontend tests
 
-You'll be enhancing a **Matter Management System** - a tool for legal teams to track cases and matters. We've provided a working foundation, and you'll implement the missing features.
+## Initial Thoughts
 
-**Time Estimate**: 4-8 hours
+This looks like a pretty tough problem - the db schema is a bit more complex than I am used to and am unfamiliar with EAV patterns. I think part one is within my capabilities but I'm less convinced about parts two and three.
 
----
+## SLA Time
 
-## 📖 Start Here
+There's some ambiguity in what counts as the first transition. The DB schema document mentions `To Do → In Progress → Done` but also mentions `Previous status (NULL for first transition)`
+I figured I should work under the assumption that first transition means first entry in `ticketing_cycle_time_histories` (as soon as a ticket enters todo we are counting down to meet the SLA) - but obviously in a real work environment this would need to be clarified before even starting work.
 
-### Step 1: Read the Instructions
+The instructions were very specific about how to approach this first part - and I was given a lot of boilerplate so I figured it was best not to deviate too far from the existing apis. Given the existing repository pattern being used I figured I should extend `MatterRepo` to allow the SLA calculation. I also noted that we were only enriching a slice of rows (thanks to the existing pagination) so I was really looking at a `Paginated Amount + 1` performance issue - fine by me. Although I got a sinking feeling that this was going to be an issue when I needed to sort by resolution time. I decided to work within the defined scope for now - not being sure how much I was going to get done in the allocated time.
 
-👉 **[ASSESSMENT.md](./ASSESSMENT.md)** - Your main task list and requirements
+What I needed to do seemed simple: - Find which status groups are in sequence 3 - Find which status ids are in these status groups - Find the **first** entry in `ticketing_cycle_time_histories` that has one of these ids - Compare it to the **first transition** in `ticketing_cycle_time_histories` - Check if it meets SLA requirement
 
-### Step 2: Understand the Database
+I did use AI (ChatGPT) to help a bit with the CTEs as I typically have worked within ORMs and as such haven't written loads of raw SQL.
+Once I had that sorted it was reasonably easy to figure out the required joins. However this left me with `Postgres Interval` field types which I was unfamiliar with. A bit of research indicated that this was not a reliable way to measure ms time differences so I reached for ChatGPT again to figure out the `ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000)` part of the query
 
-👉 **[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** - Complete schema docs (READ THIS before coding!)
+I had knocked out a codewars problem quite recently that was very similar to \_formatDuration and was reasonably confident of my solution (spoiler - this would come back to bite me).
 
-### Step 3: Quick Setup
+The front end work was trivial - I wasn't sure how much of a refactor was expected but I did end up making a Badge (basically just a span with some predefined styling) component - I thought the existing helper functions were fine and was happy to include the tw output as an 'additional class name' prop.
 
-👉 **[QUICKSTART.md](./QUICKSTART.md)** - Setup guide and troubleshooting
+I debated over adding tests at this stage but at 2-3 hours in I was hungry for a meatier problem and decided to move on. I wasn't too fussed with performance as noted earlier we were only enriching a slice of matters - and I only know about things like Materialized Views in the very abstract. Although I did note that perhaps denormalizing here is a good call. Something like adding `first_transition_at` and `first_done_at` fields to the matters themselves and either using DB triggers or just relying on the backend could save a lot of pain later on when dealing with both searches and joins for sorting.
 
----
+## Sorting
 
-## 🚀 Quick Start
+The biggest challenge here was wrapping my head around the EAV pattern. I probably spent a solid 40 minutes re-reading the Database Schema document, and digging around in psql to make sure I understood how it worked. Reaching for chatGPT again probably worked against me as I lead myself down a path of trying to piece together the custom fields in a big jsonb object within the SQL query itself and it got out of hand pretty quickly.
 
-```bash
-# 1. Verify you have Docker and prerequisites
-./verify-setup.sh
+Thinking about how to approach it a bit more sensibly I came up with: - Query `ticketing_fields` by sortBy (the name of the field) and extract the field type and id - Use an object/map to store different orderBy query strings against the field types - Only join the ` ticketing_ticket_field_value` table on the extracted field id - Should work fine.
+I began testing this out on simple things like the text and number field and was pretty happy with how it was working but I started to hit some snags with status and user. I realized that some fields (status, select, and user) were going to need additional joins so I moved away from the object approach and instead wrote a helper function (with a little help from chatGPT out of pure laziness if I'm being honest). The helper function returned an object with an orderBy string and a Join string allowing me to write a cleaner query
 
-# 2. Start everything (takes ~3 minutes to seed 10,000 matters)
-docker compose up
-
-# 3. Open the application
-open http://localhost:8080
-
-# 4. Check the API
-curl http://localhost:3000/health
+```ts
+const { orderByExpr, joinSql } = this.buildSortSql(fieldType);
+fieldJoinQuery += joinSql;
+orderByClause = `${orderByExpr} ${sortOrder.toUpperCase()} NULLS LAST`;
+//   ..
+const mattersQuery = `
+        SELECT
+          tt.id,
+          tt.board_id,
+          tt.created_at,
+          tt.updated_at
+        FROM ticketing_ticket tt
+        ${fieldJoinQuery}
+        WHERE 1=1 ${searchCondition}
+        ORDER BY ${orderByClause}
+        LIMIT $${queryParams.length + 1}
+        OFFSET $${queryParams.length + 2}
+      `;
 ```
 
-That's it! You now have a running application with 10,000 pre-seeded matters.
+Again I was happy enough to leave the excess joins to the matter enrichment because it was only happening on 10-25 matters - not worth the trade off of joining everything at this stage.
+Although I again wondered about how the next part would impact my solution.
 
----
+This was working for all custom fields although I was hitting an issue with sorting by Due Date. I probably burnt another 30-40 minutes debugging my query before I realized there was a bug in ` _formatDuration`, and I kicked myself for not jumping on unit testing sooner.
 
-## 🎯 Your Tasks
+With the bug fixed and a failsafe built in `_formatDuration` ended up looking like this
 
-We've intentionally left some features incomplete for you to implement:
+```ts
+  private _formatDuration(_durationMs: number, _isInProgress: boolean): string {
+    try {
+      // for readability rather than neccesity
+      const msInSecond = 1000;
+      const msInMinute = msInSecond * 60;
+      const msInHour = msInMinute * 60;
+      const msInDay = 24 * msInHour;
+      const d = Math.floor(_durationMs / msInDay);
+      let remainder = _durationMs % msInDay;
+      const h = Math.floor(remainder / msInHour);
+      remainder %= msInHour;
+      const m = Math.floor(remainder / msInMinute);
+      remainder %= msInMinute;
+      const s = Math.floor(remainder / msInSecond);
+      // probably no need to be accurate to ms
 
-### 1. ⏱️ Cycle Time & SLA Calculation
+      const [largest, next] = Object.entries({ d, h, m, s }).filter((entry) => entry[1] > 0);
 
-Implement logic to track how long matters take to resolve and whether they meet our 8-hour SLA.
+      let subString;
 
-**What you'll build**:
+      const [largestUnit, luAmount] = largest;
+      const [nextUnit, nuAmount] = next ?? ['', ''];
 
-- Calculate resolution time from "To Do" → "Done"
-- Determine SLA status (Met, Breached, In Progress)
-- Display with color-coded badges in the UI
+      if (largestUnit === 'd' && luAmount > 5) {
+        subString = '5d+';
+      } else {
+        subString = (luAmount + largestUnit + ' ' + nuAmount + nextUnit).trim();
+      }
+      return `${_isInProgress ? 'In Progress: ' : ''}${subString}`;
+    } catch (e) {
+      logger.error(e);
+      return 'N/A';
+    }
+  }
 
-**Files to modify**:
-
-- `backend/src/ticketing/matter/service/cycle_time_service.ts`
-- `frontend/src/components/MatterTable.tsx`
-
-### 2. 🔄 Column Sorting
-
-Add sorting functionality to ALL table columns (currently only date sorting works).
-
-**What you'll build**:
-
-- Sort by numbers, text, dates, statuses, users, currency, booleans
-- Handle NULL values appropriately
-- Work with the EAV database pattern
-
-**Files to modify**:
-
-- `backend/src/ticketing/matter/repo/matter_repo.ts`
-- `frontend/src/components/MatterTable.tsx`
-
-### 3. 🔍 Search
-
-Implement search across all fields using PostgreSQL full-text search.
-
-**What you'll build**:
-
-- Search text, numbers, status labels, user names
-- Debounced search input (500ms)
-- Use pg_trgm for fuzzy matching
-
-**Files to modify**:
-
-- `backend/src/ticketing/matter/repo/matter_repo.ts`
-- `frontend/src/App.tsx` (add SearchBar component)
-
-### 4. 🧪 Tests
-
-Write comprehensive tests for your implementations.
-
-**What you'll write**:
-
-- Unit tests for cycle time logic
-- Integration tests for API endpoints
-- Edge case tests (NULL values, empty data)
-- 80%+ coverage on business logic
-
-**Directory**: `backend/src/ticketing/matter/service/__tests__/`
-
-### 5. 📈 Scalability Documentation
-
-Document how your solution would handle 10× the current load (100,000 matters, 1,000+ concurrent users).
-
-**What to include**:
-
-- Database optimization strategies
-- Caching approaches
-- Query optimization
-- Specific, quantified recommendations
-
-**File to update**: This README.md (add your analysis at the bottom)
-
----
-
-## 🏗️ What We've Built For You
-
-To save you time, we've provided a fully working foundation:
-
-### Database (PostgreSQL)
-
-- ✅ 11 tables with complete schema
-- ✅ 10,000 pre-seeded matters with realistic data
-- ✅ 8 field types (text, number, select, date, currency, boolean, status, user)
-- ✅ Cycle time history tracking (for your implementation)
-- ✅ Performance indexes (GIN, B-tree)
-- ✅ pg_trgm extension enabled for search
-
-### Backend (Node.js + TypeScript)
-
-- ✅ Express API with proper structure
-- ✅ Database connection pooling
-- ✅ Basic CRUD endpoints (list, get, update)
-- ✅ Error handling framework
-- ✅ Winston logging configured
-- ✅ Zod validation setup
-- ✅ Vitest test configuration
-
-### Frontend (React + TypeScript)
-
-- ✅ React 18 with TypeScript
-- ✅ Vite build tooling
-- ✅ TailwindCSS styling
-- ✅ Matter table with pagination
-- ✅ Basic sorting UI (ready for your implementation)
-- ✅ Loading and error states
-
-### Infrastructure
-
-- ✅ Docker Compose orchestration
-- ✅ Automatic database seeding
-- ✅ Health checks
-- ✅ Development and production modes
-
----
-
-## 📊 System Architecture
-
-```
-┌─────────────────┐
-│   React SPA     │  ← Frontend (Port 8080)
-│  (Vite + TS)    │     - Table with pagination
-└────────┬────────┘     - YOU IMPLEMENT: Sorting, Search, Cycle Time display
-         │
-         │ HTTP/REST
-         │
-┌────────▼────────┐
-│  Express API    │  ← Backend (Port 3000)
-│  (Node.js + TS) │     - Basic CRUD endpoints
-└────────┬────────┘     - YOU IMPLEMENT: Sorting, Search, Cycle Time service
-         │
-         │ pg (connection pool)
-         │
-┌────────▼────────┐
-│  PostgreSQL 15  │  ← Database (Port 5432)
-│  + pg_trgm      │     - 10,000 seeded matters
-└─────────────────┘     - Complete schema ready
+  private _formatSLAText(_durationMs: number) {
+    return !_durationMs ? 'In Progress' : _durationMs <= this._slaThresholdMs ? 'Met' : 'Breached';
+  }
 ```
 
----
+We would need to determine an amount to display how many days in duration a ticket was. 5 Seems reasonable to me with an SLA of 8 hours but some of the seeded data had durations over 700 days - possibly a signal that my assumption about first transition might be off.
 
-## 💾 Database Schema (Quick Overview)
+It was also at this point that I realized I'll probably have to repeat some logic to sort by duration time, and perhaps some of the challenge in this exercise lay in thinking and reading ahead.
 
-We use an **Entity-Attribute-Value (EAV)** pattern for flexible field definitions. This is important to understand for your sorting and search implementations!
+Sort by duration or SLA status really meant just adding a couple more options to `buildSortSql` and reusing the query I had created from part one. So I ended up with this
 
-### Key Tables (11 total)
+```ts
+  // TODO: store types
+  private buildSortSql(
+    fieldType:
+      | 'text'
+      | 'number'
+      | 'boolean'
+      | 'date'
+      | 'currency'
+      | 'user'
+      | 'select'
+      | 'status'
+      | 'duration'
+      | 'sla',
+  ): { orderByExpr: string; joinSql: string } {
+    switch (fieldType) {
+      case 'text':
+        return {
+          orderByExpr: `ttfv.text_value`,
+          joinSql: '',
+        };
 
-| Table                            | Purpose                                  | Rows Seeded |
-| -------------------------------- | ---------------------------------------- | ----------- |
-| `ticketing_ticket`               | Matter records                           | 10,000      |
-| `ticketing_ticket_field_value`   | Field values (EAV table)                 | ~90,000     |
-| `ticketing_fields`               | Field definitions                        | 9           |
-| `ticketing_cycle_time_histories` | Status transitions                       | Variable    |
-| `ticketing_field_status_groups`  | Status groups (To Do, In Progress, Done) | 3           |
-| `users`                          | User assignments                         | 5           |
-| ... + 5 more tables              | Options, currencies, etc.                | Various     |
+      case 'number':
+        return {
+          orderByExpr: `ttfv.number_value`,
+          joinSql: '',
+        };
 
-### 8 Field Types
+      case 'date':
+        return {
+          orderByExpr: `ttfv.date_value`,
+          joinSql: '',
+        };
 
-| Type       | Storage Column                 | Example              |
-| ---------- | ------------------------------ | -------------------- |
-| `text`     | `text_value` or `string_value` | Subject, Description |
-| `number`   | `number_value`                 | Case Number          |
-| `select`   | `select_reference_value_uuid`  | Priority             |
-| `date`     | `date_value`                   | Due Date             |
-| `currency` | `currency_value` (JSONB)       | Contract Value       |
-| `boolean`  | `boolean_value`                | Urgent flag          |
-| `status`   | `status_reference_value_uuid`  | Matter Status        |
-| `user`     | `user_value`                   | Assigned To          |
+      case 'boolean':
+        return {
+          orderByExpr: `ttfv.boolean_value`,
+          joinSql: '',
+        };
 
-**📖 Full Details**: See [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) for:
+      case 'currency':
+        return {
+          orderByExpr: `(ttfv.currency_value->>'amount')::numeric`,
+          joinSql: '',
+        };
 
-- Complete table schemas with column descriptions
-- EAV pattern explanation
-- Sample SQL queries for sorting and search
-- Performance optimization tips
-- Index documentation
+      case 'user':
+        return {
+          orderByExpr: `u_sort.last_name`,
+          joinSql: `
+          LEFT JOIN users u_sort
+            ON u_sort.id = ttfv.user_value
+        `,
+        };
 
----
+      case 'select':
+        return {
+          orderByExpr: `
+          CASE so.label
+            WHEN 'Low' THEN 1
+            WHEN 'Medium' THEN 2
+            WHEN 'High' THEN 3
+            WHEN 'Critical' THEN 4
+            ELSE 5
+          END
+        `,
+          joinSql: `
+          LEFT JOIN ticketing_field_options so
+            ON so.id = ttfv.select_reference_value_uuid
+        `,
+        };
 
-## 🛠️ Development Commands
+      case 'status':
+        return {
+          orderByExpr: `sg.name`,
+          joinSql: `
+          LEFT JOIN ticketing_field_status_options s
+            ON s.id = ttfv.status_reference_value_uuid
+          LEFT JOIN ticketing_field_status_groups sg
+            ON sg.id = s.group_id
+        `,
+        };
+      case 'duration':
+        return {
+          orderByExpr: 'COALESCE(ct.cycle_time_to_done, ct.cycle_time_to_now)',
+          joinSql: this.buildCycleTimeJoin(),
+        };
+      case 'sla':
+        return {
+          orderByExpr: `
+            CASE
+              WHEN ct.cycle_time_to_done IS NULL THEN 0
+              WHEN ct.cycle_time_to_done <= ${this._slaThresholdMs} THEN 1
+              ELSE 2
+            END
+          `,
+          joinSql: this.buildCycleTimeJoin(),
+        };
 
-```bash
-# Start everything
-docker compose up
-
-# Start in development mode (with hot reload)
-docker compose -f docker-compose.dev.yml up
-
-# View logs
-docker compose logs -f backend
-
-# Stop services
-docker compose down
-
-# Clean up (removes data)
-docker compose down -v
-
-# Run tests
-cd backend && npm test
-
-# Build frontend
-cd frontend && npm run build
-
-# Build backend
-cd backend && npm run build
+      default:
+        throw new Error(`Unsupported sort field type: ${fieldType}`);
+    }
+  }
+  private buildCycleTimeJoin(): string {
+    return `
+    LEFT JOIN (
+      WITH
+        done_group AS (
+          SELECT id FROM ticketing_field_status_groups WHERE sequence = 3
+        ),
+        done_statuses AS (
+          SELECT id FROM ticketing_field_status_options
+          WHERE group_id IN (SELECT id FROM done_group)
+        ),
+        first_transition AS (
+          SELECT
+            ticket_id,
+            MIN(transitioned_at) AS first_transition_at
+          FROM ticketing_cycle_time_histories
+          GROUP BY ticket_id
+        ),
+        first_done AS (
+          SELECT
+            ticket_id,
+            MIN(transitioned_at) AS first_done_at
+          FROM ticketing_cycle_time_histories
+          WHERE to_status_id IN (SELECT id FROM done_statuses)
+          GROUP BY ticket_id
+        )
+      SELECT
+        ft.ticket_id,
+        ft.first_transition_at,
+        fd.first_done_at,
+        ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+        ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+      FROM first_transition ft
+      LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+    ) ct ON ct.ticket_id = tt.id
+  `;
+  }
 ```
 
----
+I'm reasonably pleased with this and it's fast enough with the data set we have. I still think denormalization of the `cycle_time_to_done` and `cycle_time_to_now` fields is the simplest step improving performance. The other option is a materialized view which updates on inserts to `ticketing_cycle_time_histories`
 
-## 🔌 API Endpoints
+## Search
 
-### What's Implemented
+Again some ambiguous instruction here - the comments in matter repo specifically say "use ILIKE" but the ASSESMENT.md says to use pg_trm.
+I can start with a search query using ILIKE because it's reasonably trivial. I tested that this would work at all by first completing the front end then using
 
-```http
-GET /health
-GET /api/v1/fields
-GET /api/v1/matters?page=1&limit=25&sortBy=created_at&sortOrder=desc
-GET /api/v1/matters/:id
-PATCH /api/v1/matters/:id
+```sql
+ SELECT DISTINCT ttfv.ticket_id
+            FROM ticketing_ticket_field_value ttfv
+            LEFT JOIN ticketing_field_options so
+              ON so.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_options s
+              ON s.id = ttfv.select_reference_value_uuid
+            LEFT JOIN ticketing_field_status_groups sg
+              ON sg.id = s.group_id
+            LEFT JOIN users u
+              ON u.id = ttfv.user_value
+            WHERE
+              ttfv.text_value ILIKE '%' || $1 || '%'
+            OR so.label ILIKE '%' || $1 || '%'
+            OR sg.name  ILIKE '%' || $1 || '%'
+            OR u.last_name ILIKE '%' || $1 || '%'
 ```
 
-**Note**: `sortBy` currently only supports `created_at` and `updated_at`. You'll add support for field-based sorting (case_number, status, etc.).
+As a query to get ticket Ids and then pass them into the sort query
 
-### What You'll Add
+These are the most likely to be searched fields and it did work reasonably well but it wasn't a complete solution. I also discovered it broke the sorting capabilities - in particular there was an issue with the query parameters and how they were being passed into the count query. I resolved this by moving count to before sort.
 
-**Sorting**:
+At this point I'm running low on time - added a few unit tests for the CycletimeService mostly to show that I could but I'm going to try and knock out a better search implementation before doing any more.
 
-```http
-GET /api/v1/matters?sortBy=case_number&sortOrder=asc
-GET /api/v1/matters?sortBy=status&sortOrder=desc
-```
+After quite a bit of research on trigrams and a thorough examination of the [pg_tgrm docs](https://www.postgresql.org/docs/current/pgtrgm.html) I wrapped my head around the problem. I got some hints on indexes and optimisation from chatGPT and landed on a much more thorough SQL query
 
-**Search**:
+```sql
+  WITH
+      done_group AS (
+        SELECT id
+        FROM ticketing_field_status_groups
+        WHERE sequence = 3
+      ),
+      done_statuses AS (
+        SELECT id
+        FROM ticketing_field_status_options
+        WHERE group_id IN (SELECT id FROM done_group)
+      ),
+      first_transition AS (
+        SELECT
+          ticket_id,
+          MIN(transitioned_at) AS first_transition_at
+        FROM ticketing_cycle_time_histories
+        GROUP BY ticket_id
+      ),
+      first_done AS (
+        SELECT
+          ticket_id,
+          MIN(transitioned_at) AS first_done_at
+        FROM ticketing_cycle_time_histories
+        WHERE to_status_id IN (SELECT id FROM done_statuses)
+        GROUP BY ticket_id
+      ),
+      ticket_cycle_times AS (
+        SELECT
+          ft.ticket_id,
+          ft.first_transition_at,
+          fd.first_done_at,
+          ROUND(EXTRACT(EPOCH FROM (fd.first_done_at - ft.first_transition_at)) * 1000) AS cycle_time_to_done,
+          ROUND(EXTRACT(EPOCH FROM (NOW() - ft.first_transition_at)) * 1000) AS cycle_time_to_now
+        FROM first_transition ft
+        LEFT JOIN first_done fd ON ft.ticket_id = fd.ticket_id
+      )
 
-```http
-GET /api/v1/matters?search=contract&page=1&limit=25
-```
+    SELECT DISTINCT ticket_id FROM (
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.text_value % $1::text
 
-**Cycle Time/SLA** (added to response):
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE ttfv.number_value::text ILIKE '%' || $1 || '%'
 
-```json
-{
-  "data": [{
-    "id": "uuid",
-    "fields": { ... },
-    "cycleTime": {
-      "resolutionTimeMs": 14400000,
-      "resolutionTimeFormatted": "4h",
-      "isInProgress": false
-    },
-    "sla": "Met"
-  }]
-}
-```
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_options so ON so.id = ttfv.select_reference_value_uuid
+      WHERE so.label % $1::text
 
----
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN ticketing_field_status_options s ON s.id = ttfv.select_reference_value_uuid
+      LEFT JOIN ticketing_field_status_groups sg ON sg.id = s.group_id
+      WHERE s.label % $1::text OR sg.name % $1::text
 
-## 🧪 Testing
+      UNION ALL
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      LEFT JOIN users u ON u.id = ttfv.user_value
+      WHERE (u.first_name || ' ' || u.last_name) % $1::text
 
-We've configured Vitest for you. You'll write the actual tests.
-
-**Run tests**:
-
-```bash
-cd backend
-npm test
-
-# With coverage
-npm test -- --coverage
-
-# Watch mode
-npm test -- --watch
-```
-
-**What to test**:
-
-- ✅ Cycle time calculations (NULL handling, edge cases)
-- ✅ SLA determination logic
-- ✅ Sorting with different field types
-- ✅ Search across all fields
-- ✅ API endpoints (integration tests)
-- ✅ Error conditions
-
-**Test location**: `backend/src/ticketing/matter/service/__tests__/`
-
----
-
-## 🤖 AI Tool Usage
-
-**You may use AI tools** (GitHub Copilot, ChatGPT, Claude, etc.), but:
-
-### ✅ We Expect
-
-- Honest disclosure of which tools you used
-- Explanation of what was AI-generated vs. human-written
-- Justification for using AI for specific parts
-- **Full accountability** for all submitted code
-
-### ❌ Unacceptable
-
-- Blindly copying AI output without review
-- Submitting code you don't understand
-- Not testing AI-generated code
-
-### Good Example Disclosure
-
-> "I used GitHub Copilot to generate the initial cycle time query structure, but I rewrote the NULL handling logic and added edge case tests manually. The duration formatting function was AI-assisted but I modified it to handle our specific requirements (in-progress matters, very large durations). I am confident in the correctness and can explain every line."
-
----
-
-## ✅ Submission Checklist
-
-Before you submit, make sure:
-
-### Implementation
-
-- [ ] Cycle time & SLA working correctly
-- [ ] Sorting works for ALL columns
-- [ ] Search works across all field types
-- [ ] Tests written with good coverage
-- [ ] Edge cases handled (NULL, empty, missing data)
-
-### Code Quality
-
-- [ ] No TypeScript errors (`npm run build` succeeds in both backend & frontend)
-- [ ] No linting errors (`npm run lint` passes)
-- [ ] Code follows existing patterns
-- [ ] Clear variable and function names
-- [ ] Error handling throughout
-
-### Documentation
-
-- [ ] README.md updated with your approach
-- [ ] Scalability analysis included (specific, quantified)
-- [ ] AI tool usage disclosed (if applicable)
-- [ ] Trade-offs explained
-- [ ] Setup instructions verified
-
-### Testing
-
-- [ ] Application runs with `docker compose up`
-- [ ] Tests pass with `npm test`
-- [ ] Edge cases tested
-- [ ] Integration tests included
-
-### Performance
-
-- [ ] No N+1 query problems
-- [ ] Efficient SQL queries
-- [ ] Proper index usage
-- [ ] Connection pooling configured
-
----
-
-## 📂 Project Structure
+      UNION ALL
+      SELECT tct.ticket_id
+      FROM ticket_cycle_times tct
+      WHERE ($1 ILIKE 'In Progress' AND tct.cycle_time_to_done IS NULL)
+         OR ($1 ILIKE 'Met' AND tct.cycle_time_to_done <= $2)
+         OR ($1 ILIKE 'Breached' AND tct.cycle_time_to_done > $2)
+         OR tct.cycle_time_to_done::text ILIKE '%' || $1 || '%'
+    ) AS combined
 
 ```
-matter-management-mvp/
-├── README.md                    ← You're here!
-├── ASSESSMENT.md                ← Task instructions
-├── DATABASE_SCHEMA.md           ← Schema docs (read this!)
-├── QUICKSTART.md                ← Setup guide
-├── verify-setup.sh              ← Prerequisites checker
-│
-├── backend/
-│   ├── src/
-│   │   ├── ticketing/
-│   │   │   ├── matter/
-│   │   │   │   ├── service/
-│   │   │   │   │   ├── cycle_time_service.ts    ← IMPLEMENT: Cycle time
-│   │   │   │   │   ├── matter_service.ts
-│   │   │   │   │   └── __tests__/               ← ADD: Your tests
-│   │   │   │   ├── repo/
-│   │   │   │   │   └── matter_repo.ts           ← IMPLEMENT: Sorting & search
-│   │   │   │   ├── handlers/
-│   │   │   │   │   ├── getMatters.ts
-│   │   │   │   │   ├── getMatterDetails.ts
-│   │   │   │   │   ├── updateMatter.ts
-│   │   │   │   │   └── getFields.ts
-│   │   │   │   └── routes.ts
-│   │   │   ├── fields/
-│   │   │   │   └── repo/fields_repo.ts
-│   │   │   └── types.ts
-│   │   ├── db/pool.ts
-│   │   ├── utils/
-│   │   │   ├── config.ts
-│   │   │   └── logger.ts
-│   │   └── app.ts
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vitest.config.ts
-│   └── Dockerfile
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx                      ← ADD: SearchBar component
-│   │   ├── components/
-│   │   │   ├── MatterTable.tsx          ← IMPLEMENT: Sort handlers, cycle time/SLA display
-│   │   │   └── Pagination.tsx
-│   │   ├── hooks/
-│   │   │   └── useMatters.ts
-│   │   ├── types/
-│   │   │   └── matter.ts
-│   │   └── utils/
-│   │       └── formatting.ts
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── Dockerfile
-│
-├── database/
-│   ├── schema.sql               ← Complete schema
-│   ├── seed.js                  ← Seeds 10,000 matters
-│   ├── package.json
-│   └── Dockerfile
-│
-└── docker-compose.yml           ← Main compose file
+
+Again - there's some repeated logic here, and some room for improvements - I could rank results with `similarity ( text, text ) → real`, for example. Now that I've got comfortable working with `schema.sql` (to add some more indexes) if time permits I'll probably refactor to a Materialized View with some database triggers.
+
+This is thorough enough for my first pass and I want to spend some time writing solid tests.
+
+## Testing
+
+### Unit - Backend
+
+I had already done some unit tests on `cycle_time_service.ts` and I'm pretty pleased with them but I did note that mocking the `MatterRepo` was clunky. If I was to take ownership over this project I'd be pushing some kind of dependency injection system as a priority.
+
+Tests for `matter_service.ts` didn't really do much except confirm the repo was being called correctly.
+
+However when I started testing `matter_repo.ts` I uncovered some frustrating search behavior.
+
+- When there was no results for a search all records were returned
+- Fuzzy search did not work on exact substrings on very long strings
+
+This resulted a quick refactor to the matter repo in yet another refactor to my search query; combining fuzzy search for long search strings with simple substring search for shorter substrings. I used chatgpt here to get the syntax right. A snippet for clarity - and the field where it was most useful:
+
+```sql
+      SELECT ttfv.ticket_id
+      FROM ticketing_ticket_field_value ttfv
+      WHERE
+        (length($1) >= 3 AND ttfv.text_value ILIKE '%' || $1 || '%')
+        OR (length($1) >= 4 AND ttfv.text_value % $1)
 ```
 
----
+This also had the benefit of preventing very short substring matches - leading to too many false positives.
 
-## 🎓 What We're Looking For
+`matter_repo.ts` tests essentially came down to the order and number of times client.query() was called
 
-We evaluate across these dimensions:
+### E2E Backend
 
-### 1. Code Quality (25%)
+As vitest had already been set up I decided to use supertest for testing the API layer, although I would typically use something like playwright here. I created `docker-compose.test.yml` which runs a `test-seed` script here for deterministically seeding a smaller data set, there are some refactors to help with the `ticketing_cycle_time_histories` stuff - there's probably room to abstract the loops a bit further but seeding 16 records was enough to test sorting and searching in a real system.
+Most of the tests are around the API responses matching a schema - zod was already included so I just went a bit further with this - and checking the results on search worked, that the order of sort works.
 
-- Clean, maintainable code
-- TypeScript best practices
-- Follows SOLID principles
-- Consistent patterns
+### Frontend tests
 
-### 2. Production Readiness (20%)
+I set up vitest with React Testing Library to test the debounced search functionality - I don't think any other components I created really needed anything in the way of testing - if I had further refactored the front end there likely would have been scope for writing more tests.
 
-- Comprehensive error handling
-- Input validation
-- Logging with context
-- Edge case handling
+## Optimisation thoughts
 
-### 3. Security (15%)
+A few things come to mind:
 
-- SQL injection prevention
-- Input sanitization
-- Safe error messages
-
-### 4. Testing (20%)
-
-- Unit and integration tests
-- Edge case coverage
-- Test quality and design
-
-### 5. System Design (15%)
-
-- Query optimization
-- Scalability thinking
-- Caching strategy
-- Trade-off awareness
-
-### 6. Documentation (5%)
-
-- Clear explanations
-- Decision justifications
-- Scalability analysis
-
----
-
-## 💡 Tips for Success
-
-1. **Read DATABASE_SCHEMA.md first** - Understanding the EAV pattern is critical
-2. **Start with cycle times** - It's the foundation for other features
-3. **Test as you go** - Don't wait until the end
-4. **Think production** - This is meant to be production-ready code
-5. **Document your thinking** - Explain WHY, not just WHAT
-6. **Be honest about AI** - We value transparency
-7. **Manage your time** - 4-8 hours total, prioritize accordingly
-
----
-
-## ❓ Questions?
-
-- **Setup issues?** See [QUICKSTART.md](./QUICKSTART.md)
-- **Schema questions?** See [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)
-- **Task unclear?** Document your assumptions in your submission
-- **Found a bug in the boilerplate?** Note it in your README
-
-We're interested in how you think through ambiguity. Make reasonable assumptions and document them.
-
----
-
-## 🚀 Ready to Start?
-
-1. ✅ Read [ASSESSMENT.md](./ASSESSMENT.md) for detailed requirements
-2. ✅ Review [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) to understand the data model
-3. ✅ Run `docker compose up` to start the system
-4. ✅ Start coding!
-
-**Good luck! We're excited to see your solution.** 🎉
-
----
-
-**Happy coding! 🚀**
+- one is setting up materialized views with db triggers on `ticketing_cycle_time_histories` - this will cut down joins on the queries significantly
+- Because my implementation of search involves getting an array of ticket_ids back I could cache common search terms, and avoid that query altogether
+- A database per tenant approach could cut down complexity in the EAV tables, at cost of a longer client onboarding process
